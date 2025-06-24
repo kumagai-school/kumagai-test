@@ -1,0 +1,6 @@
+streamlit
+pandas
+requests
+matplotlib
+mplfinance
+plotly>=5.0.0
