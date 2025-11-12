@@ -298,14 +298,14 @@ else:
 # -------------------------------------------------------------
 # 4. 監視リストに追加機能の追加
 # -------------------------------------------------------------
-col_add, col_spacer = st.columns([1, 4])  # ボタンとスペースで横並びにする
+# 監視リスト追加ボタン＋スペーサ
+col_add, col_spacer = st.columns([1, 4])
 
 with col_add:
     if st.button("➕ 監視リストに追加", key=f"add_{code}"):
         if not supabase or not SESSION_KEY:
             st.error("データベース接続またはセッションIDが未確立です。")
         else:
-            # ラジオボタンの選択結果から高値日（監視開始日）を決定
             days_ago = {"本日": 0, "昨日": 1, "2日前": 2, "3日前": 3, "4日前": 4, "5日前": 5}.get(option, 0)
             high_date_calc = (datetime.date.today() - datetime.timedelta(days=days_ago)).strftime('%Y-%m-%d')
 
@@ -314,7 +314,7 @@ with col_add:
                 "code": code,
                 "name": name,
                 "high_date": high_date_calc,
-                "half_value_push": None
+                "half_value_push": None,
             }
 
             try:
@@ -329,44 +329,45 @@ with col_add:
 with col_spacer:
     st.empty()
 
-        try:
-            candle_url = "https://app.kumagai-stock.com/api/candle"
-            resp = requests.get(candle_url, params={"code": code})
-            resp.raise_for_status()
-            chart_data = resp.json().get("data", [])
+# ← columns ブロックを抜けた“ここ”でチャート描画
+try:
+    candle_url = "https://app.kumagai-stock.com/api/candle"
+    resp = requests.get(candle_url, params={"code": code}, timeout=5)
+    resp.raise_for_status()
+    chart_data = resp.json().get("data", [])
 
-            if chart_data:
-                df_chart = pd.DataFrame(chart_data)
-                df_chart["date_str"] = pd.to_datetime(df_chart["date"]).dt.strftime("%Y-%m-%d")
+    if chart_data:
+        df_chart = pd.DataFrame(chart_data)
+        df_chart["date_str"] = pd.to_datetime(df_chart["date"]).dt.strftime("%Y-%m-%d")
 
-                fig = go.Figure(data=[
-                    go.Candlestick(
-                        x=df_chart["date_str"],
-                        open=df_chart["open"],
-                        high=df_chart["high"],
-                        low=df_chart["low"],
-                        close=df_chart["close"],
-                        increasing_line_color='red',
-                        decreasing_line_color='blue',
-                        hoverinfo="skip"
-                    )
-                ])
-                fig.update_layout(
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    xaxis=dict(visible=False, type="category"),
-                    yaxis=dict(visible=False),
-                    xaxis_rangeslider_visible=False,
-                    height=200,
-                    plot_bgcolor='#f8f8f8',  # チャート背景を薄いグレーに
-                    paper_bgcolor='#f8f8f8'
-                )
-                st.plotly_chart(fig, width='stretch', config={"displayModeBar": False, "staticPlot": True})
-            else:
-                st.caption("（チャートデータなし）")
-        except Exception as e:
-            st.caption(f"（エラー: {e}）")
+        fig = go.Figure(data=[
+            go.Candlestick(
+                x=df_chart["date_str"],
+                open=df_chart["open"],
+                high=df_chart["high"],
+                low=df_chart["low"],
+                close=df_chart["close"],
+                increasing_line_color='red',
+                decreasing_line_color='blue',
+                hoverinfo="skip",
+            )
+        ])
+        fig.update_layout(
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis=dict(visible=False, type="category"),
+            yaxis=dict(visible=False),
+            xaxis_rangeslider_visible=False,
+            height=200,
+            plot_bgcolor='#f8f8f8',
+            paper_bgcolor='#f8f8f8',
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False, "staticPlot": True})
+    else:
+        st.caption("（チャートデータなし）")
+except Exception as e:
+    st.caption(f"（エラー: {e}）")
 
-    st.markdown("<hr style='border-top: 2px solid #ccc;'>", unsafe_allow_html=True)
+st.markdown("<hr style='border-top: 2px solid #ccc;'>", unsafe_allow_html=True)
 
 st.markdown("""
 <div style='
