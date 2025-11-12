@@ -128,7 +128,7 @@ def load_data(source):
         # データの型を明示的に変換（high, lowなどが数値であることを保証）
         df = pd.DataFrame(res.json())
         if not df.empty:
-            for col in ["high", "low"]:
+            for col in ["high", "low", "current_price"]:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
             df.dropna(subset=["high", "low"], inplace=True)
@@ -179,7 +179,7 @@ if 'initial_data_loaded' not in st.session_state:
     load_data.clear()
     
 # ここで最新データがロードされる
-df = load_data(data_source)
+df = load_data(data_source, use_batch=use_batch_with_current)
 
 # 🔽 除外したい銘柄コードを指定
 exclude_codes = {"9501", "9432", "7203"}  # 必要に応じて追加
