@@ -50,7 +50,7 @@ if not st.session_state["authenticated"]:
     pwd = st.text_input("🔐 パスワードを入力してください", type="password")
     if pwd in VALID_PASSWORDS:
         st.session_state["authenticated"] = True
-        st.session_state["authenticated_pwd"] = pwd # 🔑追加: 認証済みパスワードを保存
+        st.session_state["authenticated_pwd"] = pwd # 認証済みパスワードを保存
         st.rerun()  # ← 再描画して中身を表示
     elif pwd:
         st.error("パスワードが違います。")
