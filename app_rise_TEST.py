@@ -298,42 +298,39 @@ else:
 # -------------------------------------------------------------
 # 4. 監視リストに追加機能の追加
 # -------------------------------------------------------------
-        col_add, col_spacer = st.columns([1, 4]) # ボタンとスペースで横並びにする
-        with col_add:
-            # 'key' を設定して、複数のボタンが同じ銘柄コードを持つようにする
-if st.button("➕ 監視リストに追加", key=f"add_{code}"):
-    if not supabase or not SESSION_KEY:
-        st.error("データベース接続またはセッションIDが未確立です。")
-    else:
-        days_ago = {"本日": 0, "昨日": 1, "2日前": 2, "3日前": 3, "4日前": 4, "5日前": 5}.get(option, 0)
-        high_date_calc = (datetime.date.today() - datetime.timedelta(days=days_ago)).strftime('%Y-%m-%d')
+col_add, col_spacer = st.columns([1, 4])  # ボタンとスペースで横並びにする
 
-        # 任意：現在値をAPIから取得
-        cur = None
-        try:
-            q = requests.get("https://app.kumagai-stock.com/api/highlow", params={"code": code}, timeout=5)
-            if q.ok:
-                cur = q.json().get("current_price")
-        except Exception:
-            pass
+with col_add:
+    # 'key' を設定して、複数のボタンが同じ銘柄コードを持つようにする
+    if st.button("➕ 監視リストに追加", key=f"add_{code}"):
+        if not supabase or not SESSION_KEY:
+            st.error("データベース接続またはセッションIDが未確立です。")
+        else:
+            # ラジオボタンの選択結果から高値日（監視開始日）を決定
+            days_ago = {"本日": 0, "昨日": 1, "2日前": 2, "3日前": 3, "4日前": 4, "5日前": 5}.get(option, 0)
+            high_date_calc = (datetime.date.today() - datetime.timedelta(days=days_ago)).strftime('%Y-%m-%d')
 
-        data_to_insert = {
-            "session_key": SESSION_KEY,
-            "code": code,
-            "name": name,
-            "high_date": high_date_calc,
-            "half_value_push": None,
-            "current_price": cur,  # ← あれば保存
-        }
-        try:
-            resp = supabase.table("watch_list").insert(data_to_insert).execute()
-            if resp.data:
-                st.success(f"銘柄 **{name}** を監視リストに追加しました！")
-            else:
-                st.error(f"銘柄 {name} の追加に失敗しました。詳細: {resp.error}")
-        except Exception as e:
-            st.error(f"データベースエラーが発生しました: {e}")
+            data_to_insert = {
+                "session_key": SESSION_KEY,
+                "code": code,
+                "name": name,
+                "high_date": high_date_calc,
+                "half_value_push": None,
+                # 必要なら現在値も保存（API呼び出しは任意）
+                # "current_price": cur
+            }
 
+            try:
+                response = supabase.table("watch_list").insert(data_to_insert).execute()
+                if response.data:
+                    st.success(f"銘柄 **{name}** を監視リストに追加しました！")
+                else:
+                    st.error(f"銘柄 {name} の追加に失敗しました。詳細: {response.error}")
+            except Exception as e:
+                st.error(f"データベースエラーが発生しました: {e}")
+
+with col_spacer:
+    st.empty()
 
         try:
             candle_url = "https://app.kumagai-stock.com/api/candle"
