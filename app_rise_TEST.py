@@ -173,29 +173,42 @@ def display_watch_list():
 # キャッシュのTTLを30分 (1800秒) に設定
 # -------------------------------------------------------------
 @st.cache_data(ttl=1800)  
-def load_data(source):
+def load_data(source: str, use_batch: bool = False):
+
+    """
+    source: today / yesterday / target2day ... など
+    use_batch: True のとき /api/highlow/batch を使い current_price 等を取得
+    """
     try:
-        url_map = {
-            "today": "https://app.kumagai-stock.com/api/highlow/today",
-            "yesterday": "https://app.kumagai-stock.com/api/highlow/yesterday",
-            "target2day": "https://app.kumagai-stock.com/api/highlow/target2day",
-            "target3day": "https://app.kumagai-stock.com/api/highlow/target3day",
-            "target4day": "https://app.kumagai-stock.com/api/highlow/target4day",
-            "target5day": "https://app.kumagai-stock.com/api/highlow/target5day"
-        }
-        url = url_map.get(source, url_map["today"])
+        if use_batch:
+            url = "https://app.kumagai-stock.com/api/highlow/batch"
+        else:
+            url_map = {
+                "today": "https://app.kumagai-stock.com/api/highlow/today",
+                "yesterday": "https://app.kumagai-stock.com/api/highlow/yesterday",
+                "target2day": "https://app.kumagai-stock.com/api/highlow/target2day",
+                "target3day": "https://app.kumagai-stock.com/api/highlow/target3day",
+                "target4day": "https://app.kumagai-stock.com/api/highlow/target4day",
+                "target5day": "https://app.kumagai-stock.com/api/highlow/target5day",
+            }
+            url = url_map.get(source, url_map["today"])
+
+
         res = requests.get(url, timeout=10)
         res.raise_for_status()
         
         # データの型を明示的に変換（high, lowなどが数値であることを保証）
         df = pd.DataFrame(res.json())
         if not df.empty:
-            # 倍率は batch では入っている想定、today系では入っていない可能性あり
-            num_cols = ["high", "low", "current_price", "倍率", "halfPriceDistancePercent"]
-            for col in num_cols:
+            # 数値列は存在するものだけ安全に変換
+            for col in ["high", "low", "倍率", "current_price", "halfPriceDistancePercent"]:
                 if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                    df[col] = pd.to_numeric(df[col], errors="coerce")
             df.dropna(subset=["high", "low"], inplace=True)
+
+            # もし today 系で 倍率 が無い場合は保険で作成
+            if "倍率" not in df.columns:
+                df["倍率"] = (df["high"] / df["low"]).round(2)
 
         return df
     except Exception as e:
