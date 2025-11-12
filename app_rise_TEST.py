@@ -301,7 +301,6 @@ else:
 col_add, col_spacer = st.columns([1, 4])  # ボタンとスペースで横並びにする
 
 with col_add:
-    # 'key' を設定して、複数のボタンが同じ銘柄コードを持つようにする
     if st.button("➕ 監視リストに追加", key=f"add_{code}"):
         if not supabase or not SESSION_KEY:
             st.error("データベース接続またはセッションIDが未確立です。")
@@ -315,9 +314,7 @@ with col_add:
                 "code": code,
                 "name": name,
                 "high_date": high_date_calc,
-                "half_value_push": None,
-                # 必要なら現在値も保存（API呼び出しは任意）
-                # "current_price": cur
+                "half_value_push": None
             }
 
             try:
