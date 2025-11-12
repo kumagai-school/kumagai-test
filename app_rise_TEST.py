@@ -3,6 +3,43 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 
+
+# =============================================================
+# 🔑 Supabase 接続とセッションキーの初期化 (追加)
+# =============================================================
+from supabase import create_client, Client # 1. import 追加
+import hashlib
+import uuid
+import datetime
+
+# 接続クライアントを初期化（キャッシュで効率化）
+@st.cache_resource
+def init_connection():
+    try:
+        # secrets.toml から情報を読み込む
+        url: str = st.secrets["supabase"]["url"]
+        key: str = st.secrets["supabase"]["key"]
+        return create_client(url, key)
+    except Exception as e:
+        # st.error(f"Supabase接続エラー: secrets.tomlを確認してください。{e}")
+        return None
+
+supabase: Client = init_connection()
+
+# ユーザー識別キー（共有パスワード利用時の代替策）
+if 'session_key' not in st.session_state:
+    # 認証済みセッションごとに一意なキーを生成
+    unique_id = uuid.uuid4().hex
+    # 共有パスワードを利用するため、セッションとパスワードを組み合わせて一意性を高める
+    auth_key = st.session_state.get("authenticated_pwd", "default")
+    st.session_state['session_key'] = hashlib.sha256((unique_id + auth_key).encode()).hexdigest()
+
+# DB操作で使用するキー
+SESSION_KEY = st.session_state.get('session_key', None)
+# =============================================================
+
+
+
 # ✅ 許可するパスワードを複数指定（リスト形式）
 VALID_PASSWORDS = ["kuma", "5678"] # ユーザー提供のパスワードを使用
 
@@ -13,6 +50,7 @@ if not st.session_state["authenticated"]:
     pwd = st.text_input("🔐 パスワードを入力してください", type="password")
     if pwd in VALID_PASSWORDS:
         st.session_state["authenticated"] = True
+　　　　st.session_state["authenticated_pwd"] = pwd # 🔑 追加: 認証済みパスワードを保存
         st.rerun()  # ← 再描画して中身を表示
     elif pwd:
         st.error("パスワードが違います。")
@@ -103,6 +141,25 @@ def load_data(source):
 # -------------------------------------------------------------
 # ラジオボタンの配置
 # -------------------------------------------------------------
+
+# --- ページのタブ切り替えUIの追加 ---
+st.markdown("<hr>", unsafe_allow_html=True)
+page_mode = st.radio(
+    "表示モードを選択", 
+    ["✅ スクリーナー結果", "📈 マイ監視リスト (1週間限定)"], 
+    horizontal=True
+)
+st.markdown("<hr>", unsafe_allow_html=True)
+
+if page_mode == "✅ スクリーナー結果":
+    # 既存のスクリーナーコード（load_dataからチャート表示まで）をここに配置
+    # ...
+    pass # 既存のコードをここに貼り付ける
+elif page_mode == "📈 マイ監視リスト (1週間限定)":
+    # 新しい監視リストの表示ロジックを呼び出す
+    display_watch_list()
+
+
 option = st.radio("『高値』付けた日を選んでください", ["本日", "昨日", "2日前", "3日前", "4日前", "5日前"], horizontal=True)
 
 data_source = {
@@ -182,6 +239,49 @@ else:
         st.markdown(detail_button_html + kabutan_finance_button_html + kabutan_news_button_html, unsafe_allow_html=True)
 
 
+# -------------------------------------------------------------
+# 4. 監視リストに追加機能の追加
+# -------------------------------------------------------------
+        col_add, col_spacer = st.columns([1, 4]) # ボタンとスペースで横並びにする
+        with col_add:
+            # 'key' を設定して、複数のボタンが同じ銘柄コードを持つようにする
+            if st.button("➕ 監視リストに追加", key=f"add_{code}"):
+        
+                if not supabase or not SESSION_KEY:
+                    st.error("データベース接続またはセッションIDが未確立です。")
+                else:
+                    # ラジオボタンの選択結果から高値日（監視開始日）を決定
+                    today_date = datetime.date.today().strftime('%Y-%m-%d')
+                    # 簡略化のため、選択された「〇日前」を今日から引いて 'high_date' とする（実際のスクリーナーの日付ロジックに合わせて要調整）
+                    days_ago = {"本日": 0, "昨日": 1, "2日前": 2, "3日前": 3, "4日前": 4, "5日前": 5}.get(option, 0)
+                    high_date_calc = (datetime.date.today() - datetime.timedelta(days=days_ago)).strftime('%Y-%m-%d')
+
+                    data_to_insert = {
+                        "session_key": SESSION_KEY,
+                        "code": code,
+                        "name": name,
+                        "high_date": high_date_calc, 
+                        # 半値押し価格は、現時点で取得できないため、一旦NULLまたは0を送信。
+                        # 別途、詳細ページから取得するか、スクリーナーAPIから値を取得する必要があります。
+                        "half_value_push": None 
+                    }
+            
+                    # Supabaseへの挿入（テーブル名: watch_list）
+                    try:
+                        # 重複登録防止のチェックは省略し、とりあえず挿入
+                        response = supabase.table("watch_list").insert(data_to_insert).execute()
+                
+                        # エラーチェック (Supabaseクライアントの挙動による)
+                        if response.data:
+                            st.success(f"銘柄 **{name}** を監視リストに追加しました！")
+                        else:
+                            # サーバー側のエラーが発生した場合
+                            st.error(f"銘柄 {name} の追加に失敗しました。詳細: {response.error}")
+
+                    except Exception as e:
+                        st.error(f"データベースエラーが発生しました: {e}")
+
+
         try:
             candle_url = "https://app.kumagai-stock.com/api/candle"
             resp = requests.get(candle_url, params={"code": code})
@@ -237,6 +337,64 @@ st.markdown("""
 <p>※本サービスは利益を保証するものではなく、投資にはリスクが伴います。投資の際は自己責任でよろしくお願いいたします。</p>
 </div>
 """, unsafe_allow_html=True)
+
+# -------------------------------------------------------------
+# 監視リスト表示関数 (追加)
+# -------------------------------------------------------------
+def display_watch_list():
+    if not supabase or not SESSION_KEY:
+        st.info("データベース接続またはセッションIDが確立されていません。")
+        return
+
+    st.markdown("## 📈 マイ監視リスト（1週間限定）", unsafe_allow_html=True)
+    
+    # 1. データの取得
+    try:
+        # 現在のセッションキーに紐づいたデータを全て取得
+        response = supabase.table("watch_list").select("*").eq("session_key", SESSION_KEY).execute()
+        
+        if not response.data:
+            st.info("監視リストに登録された銘柄はありません。")
+            return
+            
+        watch_df = pd.DataFrame(response.data)
+
+    except Exception as e:
+        st.error(f"監視リストの読み込み中にエラーが発生しました: {e}")
+        return
+
+    # 2. 掲載期限のチェックとフィルター
+    watch_df['high_date'] = pd.to_datetime(watch_df['high_date'])
+    today = pd.to_datetime(datetime.date.today())
+    
+    # 掲載期限（high_date + 7日）を過ぎた銘柄を除外
+    watch_df['expiry_date'] = watch_df['high_date'] + pd.Timedelta(days=7)
+    active_df = watch_df[watch_df['expiry_date'] >= today].copy()
+
+    if active_df.empty:
+        st.info("現在、監視期間内の銘柄はありません。")
+        return
+
+    # 3. データの整形と表示
+    display_cols = ['code', 'name', 'high_date', 'half_value_push']
+    display_df = active_df[display_cols].rename(columns={
+        'code': '銘柄コード',
+        'name': '銘柄名',
+        'high_date': '高値日 (監視開始)',
+        'half_value_push': '半値押し価格'
+    })
+    
+    # 日付列のフォーマットを調整
+    display_df['高値日 (監視開始)'] = display_df['高値日 (監視開始)'].dt.strftime('%Y-%m-%d')
+    
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True
+    )
+    st.caption("※掲載期間は高値日（監視開始日）から7日間です。期限切れの銘柄は自動で非表示になります。")
+
+# -------------------------------------------------------------
 
 
 st.markdown("""
