@@ -109,7 +109,7 @@ st.markdown("""
     margin-bottom: 20px;
     line-height: 1.3em;
 '>
-<p style='margin: 6px 0;'>⚠️ 抽出された銘柄のすべてが「ルール1」に該当するわけではございません。</p>
+<p style='margin: 6px 0;'⚠️ 抽出された銘柄のすべてが「ルール1」に該当するわけではございません。</p>
 <p style='margin: 6px 0;'>⚠️ ETF など「ルール1」対象外の銘柄も含まれています。</p>
 <p style='margin: 6px 0;'>⚠️ **「本日の抽出結果」は約30分ごとに更新されます。**</p>
 <p style='margin: 6px 0;'>⚠️ 平日8:30〜9:00の間に短時間のメンテナンスが入ることがあります。</p>
@@ -172,13 +172,8 @@ def display_watch_list():
 # -------------------------------------------------------------
 # キャッシュのTTLを30分 (1800秒) に設定
 # -------------------------------------------------------------
-@st.cache_data(ttl=1800)  
-def load_data(source: str, use_batch: bool = False):
-
-    """
-    source: today / yesterday / target2day ... など
-    use_batch: True のとき /api/highlow/batch を使い current_price 等を取得
-    """
+@st.cache_data(ttl=1800)
+def load_data(source: str, use_batch: bool = False) -> pd.DataFrame:
     try:
         if use_batch:
             url = "https://app.kumagai-stock.com/api/highlow/batch"
@@ -193,24 +188,26 @@ def load_data(source: str, use_batch: bool = False):
             }
             url = url_map.get(source, url_map["today"])
 
-
-        res = requests.get(url, timeout=10)
+        res = SESSION.get(url, timeout=(3, 15))
         res.raise_for_status()
         
         # データの型を明示的に変換（high, lowなどが数値であることを保証）
         df = pd.DataFrame(res.json())
-        if not df.empty:
-            # 数値列は存在するものだけ安全に変換
-            for col in ["high", "low", "倍率", "current_price", "halfPriceDistancePercent"]:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors="coerce")
-            df.dropna(subset=["high", "low"], inplace=True)
+        df = _normalize_schema(df)
 
-            # もし today 系で 倍率 が無い場合は保険で作成
-            if "倍率" not in df.columns:
-                df["倍率"] = (df["high"] / df["low"]).round(2)
+        # high/low無ければ表示不能なので即座に空を返す
+        if df is None or df.empty or not {"high", "low"} <= set(df.columns):
+            return pd.DataFrame()
+
+        # 倍率が無ければ計算して補う
+        if "倍率" not in df.columns:
+            df["倍率"] = (df["high"] / df["low"]).round(2)
+
+        # 必須列の欠損は落とす
+        df = df.dropna(subset=["high", "low"])
 
         return df
+
     except Exception as e:
         st.error(f"データの読み込み中にエラーが発生しました: {e}")
         return pd.DataFrame()
@@ -246,15 +243,18 @@ if 'initial_data_loaded' not in st.session_state:
     st.session_state['initial_data_loaded'] = True
     load_data.clear()
     
-# ここで最新データがロードされる
-df = load_data(data_source, use_batch=use_batch_with_current)
+# ここで早期リターン（空なら以降を実行しない）
+if df is None or df.empty:
+    st.info("データがありません。")
+    st.stop()
 
-
-# 🔽 除外したい銘柄コードを指定
-exclude_codes = {"9501", "9432", "7203"}  # 必要に応じて追加
-
-# 🔽 除外処理（コードが含まれていない行のみ残す）
-df = df[~df["code"].isin(exclude_codes)]
+# 'code' が無いJSONにも対応（today系など）
+if "code" in df.columns:
+    exclude_codes = {"9501", "9432", "7203"}
+    df = df[~df["code"].isin(exclude_codes)]
+else:
+    # code列が無ければスキップ（将来のフォーマット差異でも落ちない）
+    st.warning("銘柄コード列が見つからないため、除外リストを適用しませんでした。")
 
 if df.empty:
     st.info("データがありません。")
