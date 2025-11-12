@@ -216,62 +216,60 @@ def load_data(source: str, use_batch: bool = False) -> pd.DataFrame:
 # ラジオボタンの配置
 # -------------------------------------------------------------
 
-# --- ページのタブ切り替えUIの追加 ---
+# ===== ここより上に display_watch_list() と load_data() の定義がある前提 =====
+
+# --- ページ切替（先に分岐して、監視リストだけ表示するときは即終了） ---
 st.markdown("<hr>", unsafe_allow_html=True)
 page_mode = st.radio("表示モードを選択", ["✅ スクリーナー結果", "📈 マイ監視リスト (1週間限定)"], horizontal=True)
 st.markdown("<hr>", unsafe_allow_html=True)
 
 if page_mode == "📈 マイ監視リスト (1週間限定)":
     display_watch_list()
-    st.stop()  # ← 監視リストだけ表示して終了（下のスクリーナーが実行されないように）
+    st.stop()  # ← 以降のスクリーナー処理に進まない
 
+# --- ここからスクリーナー処理 ---
 option = st.radio("『高値』付けた日を選んでください", ["本日", "昨日", "2日前", "3日前", "4日前", "5日前"], horizontal=True)
-
 data_source = {
     "本日": "today",
     "昨日": "yesterday",
     "2日前": "target2day",
     "3日前": "target3day",
     "4日前": "target4day",
-    "5日前": "target5day"
+    "5日前": "target5day",
 }[option]
 
-# -------------------------------------------------------------
-# アプリ起動時（初回実行時）にキャッシュを強制クリアするロジック
-# -------------------------------------------------------------
-if 'initial_data_loaded' not in st.session_state:
-    st.session_state['initial_data_loaded'] = True
+# 初回はキャッシュクリア（任意）
+if "initial_data_loaded" not in st.session_state:
+    st.session_state["initial_data_loaded"] = True
     load_data.clear()
-    
-# ここで早期リターン（空なら以降を実行しない）
+
+# ★ ここで必ず df を定義してから、以降で参照する
+df = load_data(data_source, use_batch=use_batch_with_current)
+
+# 空や None の場合はここで終了（未定義参照を防ぐ）
 if df is None or df.empty:
     st.info("データがありません。")
     st.stop()
 
-# 'code' が無いJSONにも対応（today系など）
+# code 列がある場合のみ除外フィルタを適用
+exclude_codes = {"9501", "9432", "7203"}
 if "code" in df.columns:
-    exclude_codes = {"9501", "9432", "7203"}
     df = df[~df["code"].isin(exclude_codes)]
 else:
-    # code列が無ければスキップ（将来のフォーマット差異でも落ちない）
     st.warning("銘柄コード列が見つからないため、除外リストを適用しませんでした。")
 
-if df.empty:
-    st.info("データがありません。")
-else:
-    # -------------------------------------------------------------
-    # 🌟 共通スタイルを定義 (単一行で定義)
-    # -------------------------------------------------------------
-    
-    # スタイルを定義（共通スタイル）
-    button_style = "display: inline-block; padding: 3px 7px; margin-top: 4px; background-color: #f0f2f6; color: #4b4b4b; border: 1px solid #d3d3d3; border-radius: 4px; text-decoration: none; font-size: 11px; font-weight: normal; line-height: 1.2; white-space: nowrap; transition: background-color 0.1s;"
-    
-    # ホバー時のアクション（共通）
-    hover_attr = 'onmouseover="this.style.backgroundColor=\'#e8e8e8\'" onmouseout="this.style.backgroundColor=\'#f0f2f6\'"'
+# 表示に必須の列があるか確認
+required_for_display = {"high", "low"}
+missing = required_for_display - set(df.columns)
+if missing:
+    st.warning(f"必要な列が不足しています: {', '.join(sorted(missing))}")
+    st.stop()
 
-    for _, row in df.iterrows():
-        code = row["code"]
-        name = row.get("name", "")
+# --- ここから per-row 表示ループ ---
+for _, row in df.iterrows():
+    code = row.get("code", "")
+    name = row.get("name", "")
+    # ...（ここに銘柄名リンク、ボタン群、columns、チャートの try-except などを配置）
         
         # リンク先のURLを定義
         code_link = f"https://kabuka-check-app.onrender.com/?code={code}"
