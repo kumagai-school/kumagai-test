@@ -41,20 +41,32 @@ SESSION_KEY = st.session_state.get('session_key', None)
 
 
 # ✅ 許可するパスワードを複数指定（リスト形式）
-VALID_PASSWORDS = ["kuma", "5678"] # ユーザー提供のパスワードを使用
+VALID_USERS = {
+    "nao":  "admin",
+    "kuma":  "member",
+    "5678":  "member",
+}# ユーザー提供のパスワードを使用
 
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
+    st.session_state["role"] = None
 
 if not st.session_state["authenticated"]:
     pwd = st.text_input("🔐 パスワードを入力してください", type="password")
-    if pwd in VALID_PASSWORDS:
+    if pwd in VALID_USERS:
         st.session_state["authenticated"] = True
-        st.session_state["authenticated_pwd"] = pwd # 認証済みパスワードを保存
-        st.rerun()  # ← 再描画して中身を表示
+        st.session_state["authenticated_pwd"] = pwd
+        st.session_state["role"] = VALID_USERS[pwd]   # ← 権限を付与
+        # ✅ 認証後に session_key を作る（pwd を材料にする）
+        unique_id = uuid.uuid4().hex
+        st.session_state['session_key'] = hashlib.sha256((unique_id + pwd).encode()).hexdigest()
+        st.rerun()
     elif pwd:
         st.error("パスワードが違います。")
     st.stop()
+
+SESSION_KEY = st.session_state.get('session_key')
+use_batch_with_current = (st.session_state.get("role") == "admin")
 
 st.set_page_config(page_title="RシステムPRO", layout="wide")
 
@@ -106,6 +118,56 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+use_batch_with_current = st.session_state.get("role") == "admin"
+
+# -------------------------------------------------------------
+# 監視リスト表示関数 (追加)
+# -------------------------------------------------------------
+def display_watch_list():
+    if not supabase or not SESSION_KEY:
+        st.info("データベース接続またはセッションIDが確立されていません。")
+        return
+
+    st.markdown("## 📈 マイ監視リスト（1週間限定）")
+
+    try:
+        response = supabase.table("watch_list").select("*").eq("session_key", SESSION_KEY).execute()
+        if not response.data:
+            st.info("監視リストに登録された銘柄はありません。")
+            return
+        watch_df = pd.DataFrame(response.data)
+    except Exception as e:
+        st.error(f"監視リストの読み込み中にエラーが発生しました: {e}")
+        return
+
+    watch_df['high_date'] = pd.to_datetime(watch_df['high_date'])
+    today = pd.to_datetime(datetime.date.today())
+    watch_df['expiry_date'] = watch_df['high_date'] + pd.Timedelta(days=7)
+    active_df = watch_df[watch_df['expiry_date'] >= today].copy()
+    if active_df.empty:
+        st.info("現在、監視期間内の銘柄はありません。")
+        return
+
+    # 👇 列名修正（current_price の末尾カンマを削除）
+    display_cols = ['code', 'name', 'high_date', 'half_value_push', 'current_price']
+    for c in display_cols:
+        if c not in active_df.columns:
+            active_df[c] = None
+
+    display_df = active_df[display_cols].rename(columns={
+        'code': '銘柄コード',
+        'name': '銘柄名',
+        'high_date': '高値日 (監視開始)',
+        'half_value_push': '半値押し価格',
+        'current_price': '現在値',
+    })
+    display_df['高値日 (監視開始)'] = pd.to_datetime(display_df['高値日 (監視開始)']).dt.strftime('%Y-%m-%d')
+
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    st.caption("※掲載期間は高値日（監視開始日）から7日間です。期限切れの銘柄は自動で非表示になります。")
+
+
+
 
 # -------------------------------------------------------------
 # キャッシュのTTLを30分 (1800秒) に設定
@@ -128,11 +190,13 @@ def load_data(source):
         # データの型を明示的に変換（high, lowなどが数値であることを保証）
         df = pd.DataFrame(res.json())
         if not df.empty:
-            for col in ["high", "low", "current_price"]:
+            # 倍率は batch では入っている想定、today系では入っていない可能性あり
+            num_cols = ["high", "low", "current_price", "倍率", "halfPriceDistancePercent"]
+            for col in num_cols:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
             df.dropna(subset=["high", "low"], inplace=True)
-            
+
         return df
     except Exception as e:
         st.error(f"データの読み込み中にエラーが発生しました: {e}")
@@ -144,21 +208,12 @@ def load_data(source):
 
 # --- ページのタブ切り替えUIの追加 ---
 st.markdown("<hr>", unsafe_allow_html=True)
-page_mode = st.radio(
-    "表示モードを選択", 
-    ["✅ スクリーナー結果", "📈 マイ監視リスト (1週間限定)"], 
-    horizontal=True
-)
+page_mode = st.radio("表示モードを選択", ["✅ スクリーナー結果", "📈 マイ監視リスト (1週間限定)"], horizontal=True)
 st.markdown("<hr>", unsafe_allow_html=True)
 
-if page_mode == "✅ スクリーナー結果":
-    # 既存のスクリーナーコード（load_dataからチャート表示まで）をここに配置
-    # ...
-    pass # 既存のコードをここに貼り付ける
-elif page_mode == "📈 マイ監視リスト (1週間限定)":
-    # 新しい監視リストの表示ロジックを呼び出す
+if page_mode == "📈 マイ監視リスト (1週間限定)":
     display_watch_list()
-
+    st.stop()  # ← 監視リストだけ表示して終了（下のスクリーナーが実行されないように）
 
 option = st.radio("『高値』付けた日を選んでください", ["本日", "昨日", "2日前", "3日前", "4日前", "5日前"], horizontal=True)
 
@@ -180,6 +235,7 @@ if 'initial_data_loaded' not in st.session_state:
     
 # ここで最新データがロードされる
 df = load_data(data_source, use_batch=use_batch_with_current)
+
 
 # 🔽 除外したい銘柄コードを指定
 exclude_codes = {"9501", "9432", "7203"}  # 必要に応じて追加
@@ -245,41 +301,38 @@ else:
         col_add, col_spacer = st.columns([1, 4]) # ボタンとスペースで横並びにする
         with col_add:
             # 'key' を設定して、複数のボタンが同じ銘柄コードを持つようにする
-            if st.button("➕ 監視リストに追加", key=f"add_{code}"):
-        
-                if not supabase or not SESSION_KEY:
-                    st.error("データベース接続またはセッションIDが未確立です。")
-                else:
-                    # ラジオボタンの選択結果から高値日（監視開始日）を決定
-                    today_date = datetime.date.today().strftime('%Y-%m-%d')
-                    # 簡略化のため、選択された「〇日前」を今日から引いて 'high_date' とする（実際のスクリーナーの日付ロジックに合わせて要調整）
-                    days_ago = {"本日": 0, "昨日": 1, "2日前": 2, "3日前": 3, "4日前": 4, "5日前": 5}.get(option, 0)
-                    high_date_calc = (datetime.date.today() - datetime.timedelta(days=days_ago)).strftime('%Y-%m-%d')
+if st.button("➕ 監視リストに追加", key=f"add_{code}"):
+    if not supabase or not SESSION_KEY:
+        st.error("データベース接続またはセッションIDが未確立です。")
+    else:
+        days_ago = {"本日": 0, "昨日": 1, "2日前": 2, "3日前": 3, "4日前": 4, "5日前": 5}.get(option, 0)
+        high_date_calc = (datetime.date.today() - datetime.timedelta(days=days_ago)).strftime('%Y-%m-%d')
 
-                    data_to_insert = {
-                        "session_key": SESSION_KEY,
-                        "code": code,
-                        "name": name,
-                        "high_date": high_date_calc, 
-                        # 半値押し価格は、現時点で取得できないため、一旦NULLまたは0を送信。
-                        # 別途、詳細ページから取得するか、スクリーナーAPIから値を取得する必要があります。
-                        "half_value_push": None 
-                    }
-            
-                    # Supabaseへの挿入（テーブル名: watch_list）
-                    try:
-                        # 重複登録防止のチェックは省略し、とりあえず挿入
-                        response = supabase.table("watch_list").insert(data_to_insert).execute()
-                
-                        # エラーチェック (Supabaseクライアントの挙動による)
-                        if response.data:
-                            st.success(f"銘柄 **{name}** を監視リストに追加しました！")
-                        else:
-                            # サーバー側のエラーが発生した場合
-                            st.error(f"銘柄 {name} の追加に失敗しました。詳細: {response.error}")
+        # 任意：現在値をAPIから取得
+        cur = None
+        try:
+            q = requests.get("https://app.kumagai-stock.com/api/highlow", params={"code": code}, timeout=5)
+            if q.ok:
+                cur = q.json().get("current_price")
+        except Exception:
+            pass
 
-                    except Exception as e:
-                        st.error(f"データベースエラーが発生しました: {e}")
+        data_to_insert = {
+            "session_key": SESSION_KEY,
+            "code": code,
+            "name": name,
+            "high_date": high_date_calc,
+            "half_value_push": None,
+            "current_price": cur,  # ← あれば保存
+        }
+        try:
+            resp = supabase.table("watch_list").insert(data_to_insert).execute()
+            if resp.data:
+                st.success(f"銘柄 **{name}** を監視リストに追加しました！")
+            else:
+                st.error(f"銘柄 {name} の追加に失敗しました。詳細: {resp.error}")
+        except Exception as e:
+            st.error(f"データベースエラーが発生しました: {e}")
 
 
         try:
@@ -338,61 +391,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# -------------------------------------------------------------
-# 監視リスト表示関数 (追加)
-# -------------------------------------------------------------
-def display_watch_list():
-    if not supabase or not SESSION_KEY:
-        st.info("データベース接続またはセッションIDが確立されていません。")
-        return
 
-    st.markdown("## 📈 マイ監視リスト（1週間限定）", unsafe_allow_html=True)
-    
-    # 1. データの取得
-    try:
-        # 現在のセッションキーに紐づいたデータを全て取得
-        response = supabase.table("watch_list").select("*").eq("session_key", SESSION_KEY).execute()
-        
-        if not response.data:
-            st.info("監視リストに登録された銘柄はありません。")
-            return
-            
-        watch_df = pd.DataFrame(response.data)
-
-    except Exception as e:
-        st.error(f"監視リストの読み込み中にエラーが発生しました: {e}")
-        return
-
-    # 2. 掲載期限のチェックとフィルター
-    watch_df['high_date'] = pd.to_datetime(watch_df['high_date'])
-    today = pd.to_datetime(datetime.date.today())
-    
-    # 掲載期限（high_date + 7日）を過ぎた銘柄を除外
-    watch_df['expiry_date'] = watch_df['high_date'] + pd.Timedelta(days=7)
-    active_df = watch_df[watch_df['expiry_date'] >= today].copy()
-
-    if active_df.empty:
-        st.info("現在、監視期間内の銘柄はありません。")
-        return
-
-    # 3. データの整形と表示
-    display_cols = ['code', 'name', 'high_date', 'half_value_push']
-    display_df = active_df[display_cols].rename(columns={
-        'code': '銘柄コード',
-        'name': '銘柄名',
-        'high_date': '高値日 (監視開始)',
-        'half_value_push': '半値押し価格'
-    })
-    
-    # 日付列のフォーマットを調整
-    display_df['高値日 (監視開始)'] = display_df['高値日 (監視開始)'].dt.strftime('%Y-%m-%d')
-    
-    st.dataframe(
-        display_df,
-        use_container_width=True,
-        hide_index=True
-    )
-    st.caption("※掲載期間は高値日（監視開始日）から7日間です。期限切れの銘柄は自動で非表示になります。")
 
 # -------------------------------------------------------------
 
