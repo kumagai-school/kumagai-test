@@ -162,6 +162,36 @@ def load_rsystem_data(source_key: str) -> pd.DataFrame:
 
     return df_merged
 
+import pandas as pd  # 既にあれば不要
+
+def load_rsystem_watchlist() -> pd.DataFrame:
+    """RシステムPRO監視リスト用に、本日・2日前・3日前をまとめて取得する"""
+    sources = [
+        ("本日", "today"),
+        ("2日前", "target2day"),
+        ("3日前", "target3day"),
+    ]
+    all_rows = []
+
+    for label, key in sources:
+        try:
+            df_part = load_rsystem_data(key)  # 既にある読み込み関数を利用
+        except Exception:
+            continue
+
+        if df_part is None or df_part.empty:
+            continue
+
+        df_part = df_part.copy()
+        df_part["day_label"] = label
+        all_rows.append(df_part)
+
+    if not all_rows:
+        return pd.DataFrame()
+
+    return pd.concat(all_rows, ignore_index=True)
+
+
 
 # ③ マイ監視リストを読み込む
 def load_my_watchlist():
