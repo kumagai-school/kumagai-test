@@ -349,8 +349,8 @@ else:
         kabutan_fin   = f"https://kabutan.jp/stock/finance?code={code}"
         kabutan_news  = f"https://kabutan.jp/stock/news?code={code}"
 
-　　　　    # ✅ 枠付きのコンテナで中身を全部包む
-        with st.container(border=True):   # ★ ここがポイント
+        # ✅ 枠付きのコンテナで中身を全部包む
+        with st.container(border=True):   #ここがポイント
             cols = st.columns([3, 2, 2, 2, 3, 1])
             with cols[0]:
                 st.markdown(f"**[{day_label}] {name}（{code}）**")
