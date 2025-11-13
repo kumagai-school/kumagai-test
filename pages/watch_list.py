@@ -116,7 +116,6 @@ def load_batch_current() -> pd.DataFrame:
         st.warning(f"現在値の取得に失敗しました: {e}")
         return pd.DataFrame()
 
-
 @st.cache_data(ttl=300)
 def load_rsystem_data(source_key: str) -> pd.DataFrame:
     """
@@ -125,43 +124,55 @@ def load_rsystem_data(source_key: str) -> pd.DataFrame:
     batch が失敗してもページは落とさない。
     """
     url_map = {
-        "today": "https://app.kumagai-stock.com/api/highlow/today",
+        "today":      "https://app.kumagai-stock.com/api/highlow/today",
         "target2day": "https://app.kumagai-stock.com/api/highlow/target2day",
         "target3day": "https://app.kumagai-stock.com/api/highlow/target3day",
     }
-    url = url_map.get(source_key)
-    if not url:
-        return pd.DataFrame()
+    base_url = url_map.get(source_key, url_map["today"])
 
     # ① ベース（高値・安値など）
     try:
-        res = requests.get(url, timeout=(3, 10))
+        res = requests.get(base_url, timeout=(3, 15))  # ← url → base_url に修正
         res.raise_for_status()
-        df_base = pd.DataFrame(res.json())
+        df_base = pd.DataFrame(res.json())             # ← base_res → res に修正
     except Exception as e:
-        st.error(f"{source_key} のデータ取得中にエラーが発生しました: {e}")
+        st.error(f"抽出データの取得に失敗しました: {e}")
         return pd.DataFrame()
 
-    if df_base.empty or "code" not in df_base.columns:
-        return pd.DataFrame()
+    if df_base.empty:
+        return df_base
 
     # code を文字列ゼロ埋め
     df_base["code"] = df_base["code"].astype(str).str.zfill(4)
 
-    # ② batch から現在値を取得（失敗してもOK）
-    df_batch = load_batch_current()
-    if df_batch.empty:
-        # 現在値が取れなかった場合は、そのまま返す（current_price など無し）
-        return df_base
+    # ② batch で現在値などを取得（取れたらラッキー）
+    try:
+        batch_url = "https://app.kumagai-stock.com/api/highlow/batch"
+        # ★ 読み込みタイムアウトを伸ばす（30〜40秒くらい）
+        batch_res = requests.get(batch_url, timeout=(5, 40))
+        batch_res.raise_for_status()
 
-    df_batch["code"] = df_batch["code"].astype(str).str.zfill(4)
+        df_batch = pd.DataFrame(batch_res.json())
+        if not df_batch.empty:
+            df_batch["code"] = df_batch["code"].astype(str).str.zfill(4)
+            df_batch = df_batch[["code", "current_price", "halfPriceDistancePercent"]]
 
-    # ③ code で LEFT JOIN（現在値がある銘柄だけ埋まる）
-    df_merged = df_base.merge(df_batch, on="code", how="left")
+            # code で LEFT JOIN
+            df = df_base.merge(df_batch, on="code", how="left")
+        else:
+            df = df_base.copy()
+            df["current_price"] = None
+            df["halfPriceDistancePercent"] = None
 
-    return df_merged
+    except Exception as e:
+        # ★ ここで全体を落とさないのがポイント
+        st.warning(f"現在値の取得に失敗しました（{e}）。高値・安値のみで表示します。")
+        df = df_base.copy()
+        df["current_price"] = None
+        df["halfPriceDistancePercent"] = None
 
-import pandas as pd  # 既にあれば不要
+    return df
+
 
 def load_rsystem_watchlist() -> pd.DataFrame:
     """RシステムPRO監視リスト用に、本日・2日前・3日前をまとめて取得する"""
@@ -298,7 +309,7 @@ else:
 
     # 見出し行
     cols_header = st.columns([3, 2, 2, 2, 3, 1])
-    headers = ["日付 / 銘柄", "半値押し価格", "現在値", "距離(%)", "株探", "追加"]
+    headers = ["日付 / 銘柄", "半値押し株価", "現在値", "対半値押し比(%)", "株探", "追加"]
     for c, h in zip(cols_header, headers):
         with c:
             st.markdown(f"<span class='watchheader'>{h}</span>", unsafe_allow_html=True)
