@@ -283,6 +283,21 @@ if missing:
     st.warning(f"必要な列が不足しています: {', '.join(sorted(missing))}")
     st.stop()
 
+# --- スタイル定義（for ループの外） ---
+button_style = (
+    "display: inline-block; padding: 3px 7px; margin-top: 4px; "
+    "background-color: #f0f2f6; color: #4b4b4b; border: 1px solid #d3d3d3; "
+    "border-radius: 4px; text-decoration: none; font-size: 11px; "
+    "font-weight: normal; line-height: 1.2; white-space: nowrap; "
+    "transition: background-color 0.1s;"
+)
+
+hover_attr = (
+    'onmouseover="this.style.backgroundColor=\'#e8e8e8\'" '
+    'onmouseout="this.style.backgroundColor=\'#f0f2f6\'"'
+)
+
+
 # --- ここから per-row 表示ループ ---
 for _, row in df.iterrows():
     code = row.get("code", "")
