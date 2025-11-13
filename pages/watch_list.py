@@ -228,7 +228,7 @@ def calc_half_retrace(high, low):
 
 # ==============================================================
 st.markdown("---")
-st.header("📌 マイ監視リスト")
+st.markdown("### 📌 マイ監視リスト")
 my_df = load_my_watchlist()
 
 if my_df.empty:
@@ -263,8 +263,6 @@ else:
                 st.rerun()
 
 st.markdown("---")
-
-# ==============================================================
 # ==============================================================
 # 📌 RシステムPRO 監視リスト（本日 + 2日前 + 3日前）
 # ==============================================================
@@ -293,13 +291,13 @@ st.markdown("""
             color: #1f4e79;
         }
         .addbutton {
-            font-size: 11px !important;
+            font-size: 10px !important;
             padding: 2px 6px !important;
         }
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("## 📌 RシステムPRO 監視リスト（本日＋2日前＋3日前）")
+st.markdown("### 📌 RシステムPRO 監視リスト（本日＋2日前＋3日前）")
 
 df_sys = load_rsystem_watchlist()
 
@@ -335,41 +333,50 @@ else:
         news_url  = f"https://kabutan.jp/stock/news?code={code}"
 
         # 🔽 枠で囲む
-        st.markdown("<div class='watchbox'>", unsafe_allow_html=True)
+　　　　for idx, row in df_sys.iterrows():
+　　　　    code = row.get("code", "")
+    　　　　name = row.get("name", "")
+  　　　　  day_label = row.get("day_label", "本日")
 
-        cols = st.columns([3, 2, 2, 2, 3, 1])
+　　　　    high = row.get("high")
+    　　　　low = row.get("low")
+   　　　　 half_retrace = (high + low) / 2 if high is not None and low is not None else None
 
-        with cols[0]:
-            st.markdown(
-                f"<span class='watchtext'><b>[{day_label}] {name}（{code}）</b></span>",
-                unsafe_allow_html=True,
-            )
-        with cols[1]:
-            v = "-" if half_retrace is None else f"{half_retrace:.1f}"
-            st.markdown(f"<span class='watchtext'>{v}</span>", unsafe_allow_html=True)
+　　　　    current_price = row.get("current_price")
+    　　　　distance = row.get("halfPriceDistancePercent")
 
-        with cols[2]:
-            v = "-" if current_price is None else f"{current_price:.1f}"
-            st.markdown(f"<span class='watchtext'>{v}</span>", unsafe_allow_html=True)
+　　　　    kabutan_chart = f"https://kabutan.jp/stock/chart?code={code}"
+   　　　　 kabutan_fin   = f"https://kabutan.jp/stock/finance?code={code}"
+    　　　　kabutan_news  = f"https://kabutan.jp/stock/news?code={code}"
 
-        with cols[3]:
-            v = "-" if distance is None else f"{distance:.2f}"
-            st.markdown(f"<span class='watchtext'>{v}</span>", unsafe_allow_html=True)
+　　　　    # ✅ 枠付きのコンテナで中身を全部包む
+    　　　　with st.container(border=True):   # ★ ここがポイント
+        　　　　cols = st.columns([3, 2, 2, 2, 3, 1])
 
-        with cols[4]:
-            st.markdown(
-                f"<span class='watchlink'>"
-                f"[チャート]({chart_url})｜[決算]({fin_url})｜[ニュース]({news_url})"
-                f"</span>",
-                unsafe_allow_html=True
-            )
+      　　　　  with cols[0]:
+       　　　　     st.markdown(f"**[{day_label}] {name}（{code}）**")
+      　　　　  with cols[1]:
+         　　　　   st.write(fmt_num(half_retrace))
+      　　　　  with cols[2]:
+          　　　　  st.write(fmt_num(current_price, "{:.1f}"))
+      　　　　  with cols[3]:
+         　　　　   st.write(fmt_num(distance, "{:.2f}"))
 
-        with cols[5]:
-            if st.button("追加", key=f"add_{code}_{idx}", help="マイ監視リストに追加"):
-                add_to_watch_list(
-                    code, name, half_retrace, current_price, distance
-                )
-                st.success("追加しました")
-                st.rerun()
+     　　　　   with cols[4]:
+          　　　　  st.markdown(
+              　　　　  f"[チャート]({kabutan_chart})｜"
+              　　　　  f"[決算]({kabutan_fin})｜"
+              　　　　  f"[ニュース]({kabutan_news})"
+         　　　　   )
 
-        st.markdown("</div>", unsafe_allow_html=True)
+     　　　　   with cols[5]:
+          　　　　  if st.button("追加", key=f"to_my_{code}_{idx}"):
+            　　　　    add_to_watch_list(
+             　　　　       code=code,
+                 　　　　   name=name,
+                  　　　　  half_retrace=half_retrace,
+                  　　　　  current_price=current_price,
+                  　　　　  distance_percent=distance,
+             　　　　   )
+              　　　　  st.rerun()
+
