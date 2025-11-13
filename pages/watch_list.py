@@ -131,8 +131,6 @@ def calc_half_retrace(high, low):
 
 
 # ==============================================================
-st.title("📈 マイ監視リストページ")
-
 st.markdown("---")
 st.header("📌 マイ監視リスト")
 my_df = load_my_watchlist()
@@ -173,15 +171,40 @@ st.markdown("---")
 # ==============================================================
 st.header("📌 RシステムPRO 監視リスト")
 
-df_sys = df_all  # すでに作っている concat 結果を使う想定
+def load_rsystem_watchlist():
+    sources = [
+        ("本日", "today"),
+        ("2日前", "target2day"),
+        ("3日前", "target3day"),
+    ]
+    all_rows = []
+    for label, key in sources:
+        try:
+            df_part = load_rsystem_data(key)  # あなたが既に使っている読み込み関数
+        except Exception:
+            continue
+
+        if df_part is None or df_part.empty:
+            continue
+        df_part = df_part.copy()
+        df_part["day_label"] = label
+        all_rows.append(df_part)
+
+    if not all_rows:
+        return pd.DataFrame()
+    return pd.concat(all_rows, ignore_index=True)
+
+
+# 実データ取得
+df_sys = load_rsystem_watchlist()
 
 if df_sys.empty:
     st.info("本日・2日前・3日前の抽出結果がありません。")
 else:
-    # 🔹 見出し行（ヘッダー）
+    # 🔹 見出し行
     header_cols = st.columns([3, 2, 2, 2, 3, 1])
     with header_cols[0]:
-        st.markdown("**日付/銘柄**")
+        st.markdown("**日付 / 銘柄**")
     with header_cols[1]:
         st.markdown("**上げ幅の半値押し**")
     with header_cols[2]:
@@ -195,7 +218,7 @@ else:
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # 🔹 1銘柄ごとに枠付きカード表示
+    # 🔹 1銘柄ずつ枠付きで表示
     for idx, row in df_sys.iterrows():
         code = row.get("code", "")
         name = row.get("name", "")
@@ -205,8 +228,8 @@ else:
         low = row.get("low")
         half_retrace = (high + low) / 2 if high is not None and low is not None else None
 
-        current_price = row.get("current_price", None)
-        distance = row.get("halfPriceDistancePercent", None)
+        current_price = row.get("current_price")
+        distance = row.get("halfPriceDistancePercent")
 
         kabutan_chart = f"https://kabutan.jp/stock/chart?code={code}"
         kabutan_fin   = f"https://kabutan.jp/stock/finance?code={code}"
@@ -224,12 +247,11 @@ else:
             with cols[0]:
                 st.markdown(f"**[{day_label}] {name}（{code}）**")
             with cols[1]:
-                st.write(f"{fmt_num(half_retrace)}")
+                st.write(fmt_num(half_retrace))
             with cols[2]:
-                st.write(f"{fmt_num(current_price, '{:.1f}')}")
+                st.write(fmt_num(current_price, "{:.1f}"))
             with cols[3]:
-                # None → "-" 表示
-                st.write(f"{fmt_num(distance, '{:.2f}')}")
+                st.write(fmt_num(distance, "{:.2f}"))
 
             with cols[4]:
                 st.markdown(
