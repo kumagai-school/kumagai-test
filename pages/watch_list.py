@@ -3,14 +3,15 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 import requests
+import uuid
+import hashlib
 
-# ① Supabase接続関数
+# --- ① Supabase接続関数（まず定義） ---
 @st.cache_resource
 def init_connection() -> Client | None:
     url = None
     key = None
 
-    # まず secrets から読む
     try:
         if "supabase" in st.secrets:
             url = st.secrets["supabase"].get("url")
@@ -18,7 +19,6 @@ def init_connection() -> Client | None:
     except Exception:
         pass
 
-    # ダメなら環境変数から
     if not url:
         url = os.environ.get("SUPABASE_URL")
     if not key:
@@ -29,8 +29,17 @@ def init_connection() -> Client | None:
 
     return create_client(url, key)
 
-# ② ここで supabase 変数を作る（←これが先）
+# --- ② Supabase クライアント作成 ---
 supabase: Client | None = init_connection()
+
+# --- ③ 接続がなければ停止 ---
+if supabase is None:
+    st.error(
+        "Supabase 接続情報が設定されていません。\n"
+        "secrets.toml または SUPABASE_URL / SUPABASE_KEY を設定してください。"
+    )
+    st.stop()
+
 
 # ③ そのあとにチェック（←これをいきなりファイルの先頭に書かない）
 if supabase is None:
@@ -39,6 +48,13 @@ if supabase is None:
         "secrets.toml または環境変数 SUPABASE_URL / SUPABASE_KEY を設定してください。"
     )
     st.stop()
+
+if "session_key" not in st.session_state:
+    st.session_state["session_key"] = hashlib.sha256(
+        ("guest" + str(uuid.uuid4())).encode()
+    ).hexdigest()
+
+SESSION_KEY = st.session_state["session_key"]
 
 # ② RシステムPRO用 API
 @st.cache_data(ttl=900)
