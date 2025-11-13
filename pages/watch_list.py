@@ -56,6 +56,43 @@ if "session_key" not in st.session_state:
 
 SESSION_KEY = st.session_state["session_key"]
 
+def add_to_watch_list(code, name, half_retrace, current_price, distance_percent):
+    """マイ監視リストに1銘柄追加"""
+    if not supabase or not SESSION_KEY:
+        st.error("データベース接続またはセッションIDが未確立です。")
+        return
+
+    payload = {
+        "session_key": SESSION_KEY,
+        "list_type": "my",
+        "code": str(code).zfill(4),
+        "name": name,
+        "half_retrace": float(half_retrace) if half_retrace is not None else None,
+        "current_price": float(current_price) if current_price is not None else None,
+        "distance_percent": float(distance_percent) if distance_percent is not None else None,
+    }
+def fmt_num(val, fmt="{:.2f}"):
+    """None / NaN を '-' にして表示"""
+    if val is None:
+        return "-"
+    try:
+        import math
+        if isinstance(val, float) and math.isnan(val):
+            return "-"
+    except Exception:
+        pass
+    try:
+        return fmt.format(val)
+    except Exception:
+        return str(val)
+
+    try:
+        resp = supabase.table("watch_list").insert(payload).execute()
+        if resp.data:
+            st.success(f"銘柄 **{name}（{code}）** をマイ監視リストに追加しました。")
+    except Exception as e:
+        st.error(f"マイ監視リストへの登録中にエラーが発生しました: {e}")
+        
 # ② RシステムPRO用 API
 @st.cache_data(ttl=900)
 def load_rsystem_data(source):
@@ -136,55 +173,80 @@ st.markdown("---")
 # ==============================================================
 st.header("📌 RシステムPRO 監視リスト")
 
-# ⑥ 今日・2日前・3日前をまとめて取得
-sources = [
-    ("本日", "today"),
-    ("2日前", "target2day"),
-    ("3日前", "target3day"),
-]
+df_sys = df_all  # すでに作っている concat 結果を使う想定
 
-all_rows = []
-
-for label, key in sources:
-    try:
-        df = load_rsystem_data(key)
-        if df is not None and not df.empty:
-            df["day_label"] = label
-            all_rows.append(df)
-    except:
-        pass
-
-if not all_rows:
-    st.info("データがありません。")
+if df_sys.empty:
+    st.info("本日・2日前・3日前の抽出結果がありません。")
 else:
-    df_all = pd.concat(all_rows, ignore_index=True)
+    # 🔹 見出し行（ヘッダー）
+    header_cols = st.columns([3, 2, 2, 2, 3, 1])
+    with header_cols[0]:
+        st.markdown("**日付/銘柄**")
+    with header_cols[1]:
+        st.markdown("**上げ幅の半値押し**")
+    with header_cols[2]:
+        st.markdown("**現在株価**")
+    with header_cols[3]:
+        st.markdown("**半値押しまでの距離(%)**")
+    with header_cols[4]:
+        st.markdown("**株探リンク**")
+    with header_cols[5]:
+        st.markdown("**マイリスト**")
 
-    for _, row in df_all.iterrows():
-        code = row["code"]
-        name = row["name"]
-        day_label = row["day_label"]
+    st.markdown("<hr>", unsafe_allow_html=True)
 
-        high, low = row["high"], row["low"]
-        half_retrace = calc_half_retrace(high, low)
-        current_price = row.get("current_price")
-        distance = row.get("halfPriceDistancePercent")
+    # 🔹 1銘柄ごとに枠付きカード表示
+    for idx, row in df_sys.iterrows():
+        code = row.get("code", "")
+        name = row.get("name", "")
+        day_label = row.get("day_label", "本日")
+
+        high = row.get("high")
+        low = row.get("low")
+        half_retrace = (high + low) / 2 if high is not None and low is not None else None
+
+        current_price = row.get("current_price", None)
+        distance = row.get("halfPriceDistancePercent", None)
 
         kabutan_chart = f"https://kabutan.jp/stock/chart?code={code}"
         kabutan_fin   = f"https://kabutan.jp/stock/finance?code={code}"
         kabutan_news  = f"https://kabutan.jp/stock/news?code={code}"
 
-        cols = st.columns([3, 2, 2, 2, 3])
-        with cols[0]:
-            st.markdown(f"**[{day_label}] {name}（{code}）**")
-        with cols[1]:
-            st.write(f"半値押し: {half_retrace}")
-        with cols[2]:
-            st.write(f"現在値: {current_price}")
-        with cols[3]:
-            st.write(f"距離: {distance}%")
-        with cols[4]:
+        # 枠付きコンテナ
+        with st.container():
             st.markdown(
-                f"[チャート]({kabutan_chart})｜"
-                f"[決算]({kabutan_fin})｜"
-                f"[ニュース]({kabutan_news})"
+                "<div style='border:1px solid #ddd; border-radius:6px; padding:6px 10px; margin-bottom:6px;'>",
+                unsafe_allow_html=True,
             )
+
+            cols = st.columns([3, 2, 2, 2, 3, 1])
+
+            with cols[0]:
+                st.markdown(f"**[{day_label}] {name}（{code}）**")
+            with cols[1]:
+                st.write(f"{fmt_num(half_retrace)}")
+            with cols[2]:
+                st.write(f"{fmt_num(current_price, '{:.1f}')}")
+            with cols[3]:
+                # None → "-" 表示
+                st.write(f"{fmt_num(distance, '{:.2f}')}")
+
+            with cols[4]:
+                st.markdown(
+                    f"[チャート]({kabutan_chart})｜"
+                    f"[決算]({kabutan_fin})｜"
+                    f"[ニュース]({kabutan_news})"
+                )
+
+            with cols[5]:
+                if st.button("追加", key=f"to_my_{code}_{idx}"):
+                    add_to_watch_list(
+                        code=code,
+                        name=name,
+                        half_retrace=half_retrace,
+                        current_price=current_price,
+                        distance_percent=distance,
+                    )
+                    st.rerun()
+
+            st.markdown("</div>", unsafe_allow_html=True)
