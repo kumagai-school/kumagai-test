@@ -4,6 +4,23 @@ import requests
 import plotly.graph_objects as go
 
 
+def _normalize_schema(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+
+    # code ゼロ埋め
+    if "code" in df.columns:
+        df["code"] = df["code"].astype(str).str.zfill(4)
+
+    # 数値っぽい列を変換
+    for col in ["high", "low", "倍率", "current_price"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    return df
+
+
+
 # =============================================================
 # 🔑 Supabase 接続とセッションキーの初期化 (追加)
 # =============================================================
@@ -188,14 +205,15 @@ def load_data(source: str, use_batch: bool = False) -> pd.DataFrame:
             }
             url = url_map.get(source, url_map["today"])
 
-        res = SESSION.get(url, timeout=(3, 15))
+        # ★ SESSIONではなく、ふつうの requests.get を使う
+        res = requests.get(url, timeout=(3, 15))
         res.raise_for_status()
         
-        # データの型を明示的に変換（high, lowなどが数値であることを保証）
+        # JSON → DataFrame
         df = pd.DataFrame(res.json())
-        df = _normalize_schema(df)
+        df = _normalize_schema(df)  # ← これを使う場合は、上に関数定義を置いてください
 
-        # high/low無ければ表示不能なので即座に空を返す
+        # high/low 無ければ表示不能なので即座に空を返す
         if df is None or df.empty or not {"high", "low"} <= set(df.columns):
             return pd.DataFrame()
 
