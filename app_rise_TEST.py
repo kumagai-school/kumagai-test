@@ -271,39 +271,39 @@ for _, row in df.iterrows():
     name = row.get("name", "")
     # ...（ここに銘柄名リンク、ボタン群、columns、チャートの try-except などを配置）
         
-        # リンク先のURLを定義
-        code_link = f"https://kabuka-check-app.onrender.com/?code={code}"
+    # リンク先のURLを定義
+    code_link = f"https://kabuka-check-app.onrender.com/?code={code}"
+    
+    # リンク先：決算・企業情報（株探）
+    kabutan_finance_url = f"https://kabutan.jp/stock/finance?code={code}"
         
-        # リンク先：決算・企業情報（株探）
-        kabutan_finance_url = f"https://kabutan.jp/stock/finance?code={code}"
-        
-        # リンク先：ニュース（株探）
-        kabutan_news_url = f"https://kabutan.jp/stock/news?code={code}"
-        
-        multiplier_html = f"<span style='color:green; font-weight:bold;'>{row['倍率']:.2f}倍</span>"
+    # リンク先：ニュース（株探）
+    kabutan_news_url = f"https://kabutan.jp/stock/news?code={code}"
+    
+    multiplier_html = f"<span style='color:green; font-weight:bold;'>{row['倍率']:.2f}倍</span>"
 
-        st.markdown("<hr style='border-top: 2px solid #ccc;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border-top: 2px solid #ccc;'>", unsafe_allow_html=True)
 
-        st.markdown(f"""
-            <div style='font-size:18px; line-height:1.6em;'>
-                <b><a href="{code_link}" target="_blank">{name}（{code}）</a></b>　
-                {multiplier_html}<br>
-                📉 安値 ： {row["low"]}（{row["low_date"]}）<br>
-                📈 高値 ： {row["high"]}（{row["high_date"]}）
-            </div>
-        """, unsafe_allow_html=True)
+    st.markdown(f"""
+        <div style='font-size:18px; line-height:1.6em;'>
+            <b><a href="{code_link}" target="_blank">{name}（{code}）</a></b>　
+            {multiplier_html}<br>
+            📉 安値 ： {row["low"]}（{row["low_date"]}）<br>
+            📈 高値 ： {row["high"]}（{row["high_date"]}）
+        </div>
+    """, unsafe_allow_html=True)
         
-        # 1. 詳細・半値押し計算へ のボタン (単一行f-string)
-        detail_button_html = f'<a href="{code_link}" target="_blank" style="{button_style}" {hover_attr} title="別ページで詳細な計算結果とチャートを確認します。">詳細・半値押し計算へ</a>'
+    # 1. 詳細・半値押し計算へ のボタン (単一行f-string)
+    detail_button_html = f'<a href="{code_link}" target="_blank" style="{button_style}" {hover_attr} title="別ページで詳細な計算結果とチャートを確認します。">詳細・半値押し計算へ</a>'
         
-        # 2. 決算・企業情報（株探） のボタン (単一行f-string)
-        kabutan_finance_button_html = f'<a href="{kabutan_finance_url}" target="_blank" style="{button_style} margin-left: 10px;" {hover_attr} title="株探の企業情報ページへ移動し、決算情報や株価を確認します。">決算・企業情報（株探）</a>'
+    # 2. 決算・企業情報（株探） のボタン (単一行f-string)
+    kabutan_finance_button_html = f'<a href="{kabutan_finance_url}" target="_blank" style="{button_style} margin-left: 10px;" {hover_attr} title="株探の企業情報ページへ移動し、決算情報や株価を確認します。">決算・企業情報（株探）</a>'
         
-        # 3. ニュース（株探） のボタン (単一行f-string)
-        kabutan_news_button_html = f'<a href="{kabutan_news_url}" target="_blank" style="{button_style} margin-left: 10px;" {hover_attr} title="株探のニュースページへ移動し、最新の情報を確認します。">ニュース（株探）</a>'
+    # 3. ニュース（株探） のボタン (単一行f-string)
+    kabutan_news_button_html = f'<a href="{kabutan_news_url}" target="_blank" style="{button_style} margin-left: 10px;" {hover_attr} title="株探のニュースページへ移動し、最新の情報を確認します。">ニュース（株探）</a>'
         
-        # 3つのボタンを同じブロックでマークダウンとして表示することで並べる
-        st.markdown(detail_button_html + kabutan_finance_button_html + kabutan_news_button_html, unsafe_allow_html=True)
+    # 3つのボタンを同じブロックでマークダウンとして表示することで並べる
+    st.markdown(detail_button_html + kabutan_finance_button_html + kabutan_news_button_html, unsafe_allow_html=True)
 
 
 # -------------------------------------------------------------
