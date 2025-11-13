@@ -97,7 +97,6 @@ def fmt_num(val, fmt="{:.2f}"):
         
 # ② RシステムPRO用 API
 @st.cache_data(ttl=900)
-@st.cache_data(ttl=300)
 def load_batch_current() -> pd.DataFrame:
     """現在値付きの batch を 1回だけ取得してキャッシュ"""
     batch_url = "https://app.kumagai-stock.com/api/highlow/batch"
