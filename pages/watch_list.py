@@ -1,19 +1,16 @@
+import os
 import streamlit as st
+from supabase import create_client, Client
 import pandas as pd
 import requests
 
-# ① Supabase 接続（app_rise_PRO と同じ処理）
-from supabase import create_client, Client
-
-if supabase is None:
-    st.error("Supabase 接続情報が設定されていません。\nsecrets.toml または環境変数 SUPABASE_URL / SUPABASE_KEY を設定してください。")
-    st.stop()
-
+# ① Supabase接続関数
 @st.cache_resource
 def init_connection() -> Client | None:
-    # まず st.secrets を試す
     url = None
     key = None
+
+    # まず secrets から読む
     try:
         if "supabase" in st.secrets:
             url = st.secrets["supabase"].get("url")
@@ -21,27 +18,30 @@ def init_connection() -> Client | None:
     except Exception:
         pass
 
-    # だめなら環境変数から
+    # ダメなら環境変数から
     if not url:
         url = os.environ.get("SUPABASE_URL")
     if not key:
         key = os.environ.get("SUPABASE_KEY")
 
     if not url or not key:
-        # ここで None を返して、あとで画面側で優しくメッセージを出す
         return None
 
     return create_client(url, key)
 
+# ② ここで supabase 変数を作る（←これが先）
 supabase: Client | None = init_connection()
-SESSION_KEY = st.session_state.get("session_key", "default_session")
 
-# セッションID
-if "session_key" not in st.session_state:
-    st.session_state["session_key"] = "session_" + st.session_state.get("authenticated_pwd", "default")
+# ③ そのあとにチェック（←これをいきなりファイルの先頭に書かない）
+if supabase is None:
+    st.error(
+        "Supabase 接続情報が設定されていません。\n"
+        "secrets.toml または環境変数 SUPABASE_URL / SUPABASE_KEY を設定してください。"
+    )
+    st.stop()
 
-SESSION_KEY = st.session_state["session_key"]
-
+# ④ ここから下にページ本体のコード
+st.title("📈 マイ監視リストページ")
 
 # ② RシステムPRO用 API
 @st.cache_data(ttl=900)
