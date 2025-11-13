@@ -5,6 +5,8 @@ import pandas as pd
 import requests
 import uuid
 import hashlib
+from requests.exceptions import ReadTimeout, RequestException
+
 
 # --- ① Supabase接続関数（まず定義） ---
 @st.cache_resource
@@ -95,34 +97,70 @@ def fmt_num(val, fmt="{:.2f}"):
         
 # ② RシステムPRO用 API
 @st.cache_data(ttl=900)
-def load_rsystem_data(source_key: str) -> pd.DataFrame:
-    """本日・2日前・3日前などの抽出データを読み込みつつ
-       バッチAPIの現在値(current_price)をマージする。
-    """
+@st.cache_data(ttl=300)
+def load_batch_current() -> pd.DataFrame:
+    """現在値付きの batch を 1回だけ取得してキャッシュ"""
+    batch_url = "https://app.kumagai-stock.com/api/highlow/batch"
+    try:
+        res = requests.get(batch_url, timeout=(3, 7))  # 接続3秒 + 読み取り7秒
+        res.raise_for_status()
+        df = pd.DataFrame(res.json())
+        if df.empty:
+            return pd.DataFrame()
+        # 必要な列だけ残す
+        cols = ["code", "current_price", "halfPriceDistancePercent"]
+        return df[[c for c in cols if c in df.columns]].copy()
+    except ReadTimeout:
+        st.warning("現在値の取得がタイムアウトしました。半値押しは表示されますが、現在値・距離は空欄になります。")
+        return pd.DataFrame()
+    except RequestException as e:
+        st.warning(f"現在値の取得に失敗しました: {e}")
+        return pd.DataFrame()
 
-    # ① 高値・安値の抽出データ
+
+@st.cache_data(ttl=300)
+def load_rsystem_data(source_key: str) -> pd.DataFrame:
+    """
+    本日・2日前・3日前の抽出結果に、
+    可能なら batch から現在値をマージして返す。
+    batch が失敗してもページは落とさない。
+    """
     url_map = {
         "today": "https://app.kumagai-stock.com/api/highlow/today",
         "target2day": "https://app.kumagai-stock.com/api/highlow/target2day",
         "target3day": "https://app.kumagai-stock.com/api/highlow/target3day",
     }
-    url = url_map.get(source_key, url_map["today"])
-    base = requests.get(url, timeout=10).json()
-    df_base = pd.DataFrame(base)
-
-    if df_base.empty:
+    url = url_map.get(source_key)
+    if not url:
         return pd.DataFrame()
 
-    # ② 現在値を含む batch API
-    batch_url = "https://app.kumagai-stock.com/api/highlow/batch"
-    batch = requests.get(batch_url, timeout=10).json()
-    df_batch = pd.DataFrame(batch)
+    # ① ベース（高値・安値など）
+    try:
+        res = requests.get(url, timeout=(3, 10))
+        res.raise_for_status()
+        df_base = pd.DataFrame(res.json())
+    except Exception as e:
+        st.error(f"{source_key} のデータ取得中にエラーが発生しました: {e}")
+        return pd.DataFrame()
 
-    # ③ code で JOIN
-    df = df_base.merge(df_batch[["code", "current_price", "halfPriceDistancePercent"]],
-                       on="code", how="left")
+    if df_base.empty or "code" not in df_base.columns:
+        return pd.DataFrame()
 
-    return df
+    # code を文字列ゼロ埋め
+    df_base["code"] = df_base["code"].astype(str).str.zfill(4)
+
+    # ② batch から現在値を取得（失敗してもOK）
+    df_batch = load_batch_current()
+    if df_batch.empty:
+        # 現在値が取れなかった場合は、そのまま返す（current_price など無し）
+        return df_base
+
+    df_batch["code"] = df_batch["code"].astype(str).str.zfill(4)
+
+    # ③ code で LEFT JOIN（現在値がある銘柄だけ埋まる）
+    df_merged = df_base.merge(df_batch, on="code", how="left")
+
+    return df_merged
 
 
 # ③ マイ監視リストを読み込む
@@ -187,110 +225,111 @@ else:
 st.markdown("---")
 
 # ==============================================================
-st.header("📌 RシステムPRO 監視リスト")
+# ==============================================================
+# 📌 RシステムPRO 監視リスト（本日 + 2日前 + 3日前）
+# ==============================================================
 
-def load_rsystem_watchlist():
-    sources = [
-        ("本日", "today"),
-        ("2日前", "target2day"),
-        ("3日前", "target3day"),
-    ]
-    all_rows = []
-    for label, key in sources:
-        try:
-            df_part = load_rsystem_data(key)  # あなたが既に使っている読み込み関数
-        except Exception:
-            continue
+st.markdown("""
+    <style>
+        .watchbox {
+            border: 1px solid #d0d0d0;
+            border-radius: 8px;
+            padding: 6px 12px;
+            margin-bottom: 10px;
+            background-color: #fafafa;
+        }
+        .watchtext {
+            font-size: 12px;
+            color: #333333;
+            font-family: "Segoe UI", "Helvetica Neue", "Arial";
+        }
+        .watchheader {
+            font-size: 12px;
+            font-weight: 600;
+            color: #444444;
+        }
+        .watchlink {
+            font-size: 11px;
+            color: #1f4e79;
+        }
+        .addbutton {
+            font-size: 11px !important;
+            padding: 2px 6px !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-        if df_part is None or df_part.empty:
-            continue
-        df_part = df_part.copy()
-        df_part["day_label"] = label
-        all_rows.append(df_part)
+st.markdown("## 📌 RシステムPRO 監視リスト（本日＋2日前＋3日前）")
 
-    if not all_rows:
-        return pd.DataFrame()
-    return pd.concat(all_rows, ignore_index=True)
-
-
-# 実データ取得
-df_sys = load_rsystem_data("today")         # 本日
-df_sys2 = load_rsystem_data("target2day")   # 2日前
-df_sys3 = load_rsystem_data("target3day")   # 3日前
-
-df_all = pd.concat([df_sys, df_sys2, df_sys3], ignore_index=True)
+df_sys = load_rsystem_watchlist()
 
 if df_sys.empty:
     st.info("本日・2日前・3日前の抽出結果がありません。")
 else:
-    # 🔹 見出し行
-    header_cols = st.columns([3, 2, 2, 2, 3, 1])
-    with header_cols[0]:
-        st.markdown("**日付 / 銘柄**")
-    with header_cols[1]:
-        st.markdown("**上げ幅の半値押し**")
-    with header_cols[2]:
-        st.markdown("**現在株価**")
-    with header_cols[3]:
-        st.markdown("**半値押しまでの距離(%)**")
-    with header_cols[4]:
-        st.markdown("**株探リンク**")
-    with header_cols[5]:
-        st.markdown("**マイリスト**")
+
+    # 見出し行
+    cols_header = st.columns([3, 2, 2, 2, 3, 1])
+    headers = ["日付 / 銘柄", "半値押し価格", "現在値", "距離(%)", "株探", "追加"]
+    for c, h in zip(cols_header, headers):
+        with c:
+            st.markdown(f"<span class='watchheader'>{h}</span>", unsafe_allow_html=True)
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
-    # 🔹 1銘柄ずつ枠付きで表示
+    # 銘柄ごとに表示
     for idx, row in df_sys.iterrows():
         code = row.get("code", "")
         name = row.get("name", "")
-        day_label = row.get("day_label", "本日")
+        day_label = row.get("day_label", "")
 
         high = row.get("high")
         low = row.get("low")
-        half_retrace = (high + low) / 2 if high is not None and low is not None else None
 
+        half_retrace = (high + low) / 2 if high and low else None
         current_price = row.get("current_price")
         distance = row.get("halfPriceDistancePercent")
 
-        kabutan_chart = f"https://kabutan.jp/stock/chart?code={code}"
-        kabutan_fin   = f"https://kabutan.jp/stock/finance?code={code}"
-        kabutan_news  = f"https://kabutan.jp/stock/news?code={code}"
+        # 株探リンク
+        chart_url = f"https://kabutan.jp/stock/chart?code={code}"
+        fin_url   = f"https://kabutan.jp/stock/finance?code={code}"
+        news_url  = f"https://kabutan.jp/stock/news?code={code}"
 
-        # 枠付きコンテナ
-        with st.container():
+        # 🔽 枠で囲む
+        st.markdown("<div class='watchbox'>", unsafe_allow_html=True)
+
+        cols = st.columns([3, 2, 2, 2, 3, 1])
+
+        with cols[0]:
             st.markdown(
-                "<div style='border:1px solid #ddd; border-radius:6px; padding:6px 10px; margin-bottom:6px;'>",
+                f"<span class='watchtext'><b>[{day_label}] {name}（{code}）</b></span>",
                 unsafe_allow_html=True,
             )
+        with cols[1]:
+            v = "-" if half_retrace is None else f"{half_retrace:.1f}"
+            st.markdown(f"<span class='watchtext'>{v}</span>", unsafe_allow_html=True)
 
-            cols = st.columns([3, 2, 2, 2, 3, 1])
+        with cols[2]:
+            v = "-" if current_price is None else f"{current_price:.1f}"
+            st.markdown(f"<span class='watchtext'>{v}</span>", unsafe_allow_html=True)
 
-            with cols[0]:
-                st.markdown(f"**[{day_label}] {name}（{code}）**")
-            with cols[1]:
-                st.write(fmt_num(half_retrace))
-            with cols[2]:
-                st.write(fmt_num(current_price, "{:.1f}"))
-            with cols[3]:
-                st.write(fmt_num(distance, "{:.2f}"))
+        with cols[3]:
+            v = "-" if distance is None else f"{distance:.2f}"
+            st.markdown(f"<span class='watchtext'>{v}</span>", unsafe_allow_html=True)
 
-            with cols[4]:
-                st.markdown(
-                    f"[チャート]({kabutan_chart})｜"
-                    f"[決算]({kabutan_fin})｜"
-                    f"[ニュース]({kabutan_news})"
+        with cols[4]:
+            st.markdown(
+                f"<span class='watchlink'>"
+                f"[チャート]({chart_url})｜[決算]({fin_url})｜[ニュース]({news_url})"
+                f"</span>",
+                unsafe_allow_html=True
+            )
+
+        with cols[5]:
+            if st.button("追加", key=f"add_{code}_{idx}", help="マイ監視リストに追加"):
+                add_to_watch_list(
+                    code, name, half_retrace, current_price, distance
                 )
+                st.success("追加しました")
+                st.rerun()
 
-            with cols[5]:
-                if st.button("追加", key=f"to_my_{code}_{idx}"):
-                    add_to_watch_list(
-                        code=code,
-                        name=name,
-                        half_retrace=half_retrace,
-                        current_price=current_price,
-                        distance_percent=distance,
-                    )
-                    st.rerun()
-
-            st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
