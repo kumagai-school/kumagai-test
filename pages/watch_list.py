@@ -95,16 +95,34 @@ def fmt_num(val, fmt="{:.2f}"):
         
 # ② RシステムPRO用 API
 @st.cache_data(ttl=900)
-def load_rsystem_data(source):
+def load_rsystem_data(source_key: str) -> pd.DataFrame:
+    """本日・2日前・3日前などの抽出データを読み込みつつ
+       バッチAPIの現在値(current_price)をマージする。
+    """
+
+    # ① 高値・安値の抽出データ
     url_map = {
         "today": "https://app.kumagai-stock.com/api/highlow/today",
         "target2day": "https://app.kumagai-stock.com/api/highlow/target2day",
         "target3day": "https://app.kumagai-stock.com/api/highlow/target3day",
     }
-    url = url_map.get(source)
-    res = requests.get(url, timeout=10)
-    res.raise_for_status()
-    return pd.DataFrame(res.json())
+    url = url_map.get(source_key, url_map["today"])
+    base = requests.get(url, timeout=10).json()
+    df_base = pd.DataFrame(base)
+
+    if df_base.empty:
+        return pd.DataFrame()
+
+    # ② 現在値を含む batch API
+    batch_url = "https://app.kumagai-stock.com/api/highlow/batch"
+    batch = requests.get(batch_url, timeout=10).json()
+    df_batch = pd.DataFrame(batch)
+
+    # ③ code で JOIN
+    df = df_base.merge(df_batch[["code", "current_price", "halfPriceDistancePercent"]],
+                       on="code", how="left")
+
+    return df
 
 
 # ③ マイ監視リストを読み込む
@@ -196,7 +214,11 @@ def load_rsystem_watchlist():
 
 
 # 実データ取得
-df_sys = load_rsystem_watchlist()
+df_sys = load_rsystem_data("today")         # 本日
+df_sys2 = load_rsystem_data("target2day")   # 2日前
+df_sys3 = load_rsystem_data("target3day")   # 3日前
+
+df_all = pd.concat([df_sys, df_sys2, df_sys3], ignore_index=True)
 
 if df_sys.empty:
     st.info("本日・2日前・3日前の抽出結果がありません。")
