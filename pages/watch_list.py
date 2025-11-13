@@ -351,6 +351,8 @@ else:
 
         # ✅ 枠付きのコンテナで中身を全部包む
         with st.container(border=True):   #ここがポイント
+            st.markdown('<div class="watch-row">', unsafe_allow_html=True)
+
             cols = st.columns([3, 2, 2, 2, 3, 1])
             with cols[0]:
                 st.markdown(f"**[{day_label}] {name}（{code}）**")
@@ -367,7 +369,7 @@ else:
                     f"[ニュース]({kabutan_news})"
                 )
             with cols[5]:
-                if st.button("追加", key=f"to_my_{code}_{idx}"):
+                if st.button("追加", key=f"to_my_{code}_{idx}", help="マイ監視リストに追加"):
                     add_to_watch_list(
                         code=code,
                         name=name,
@@ -376,4 +378,6 @@ else:
                         distance_percent=distance,
                     )
                     st.rerun()
+
+            st.markdown("</div>", unsafe_allow_html=True)
 
