@@ -333,50 +333,47 @@ else:
         news_url  = f"https://kabutan.jp/stock/news?code={code}"
 
         # 🔽 枠で囲む
-　　　　for idx, row in df_sys.iterrows():
-　　　　    code = row.get("code", "")
-    　　　　name = row.get("name", "")
-  　　　　  day_label = row.get("day_label", "本日")
+    for idx, row in df_sys.iterrows():
+        code = row.get("code", "")
+        name = row.get("name", "")
+        day_label = row.get("day_label", "本日")
 
-　　　　    high = row.get("high")
-    　　　　low = row.get("low")
-   　　　　 half_retrace = (high + low) / 2 if high is not None and low is not None else None
+        high = row.get("high")
+        low = row.get("low")
+        half_retrace = (high + low) / 2 if high is not None and low is not None else None
 
-　　　　    current_price = row.get("current_price")
-    　　　　distance = row.get("halfPriceDistancePercent")
+        current_price = row.get("current_price")
+        distance = row.get("halfPriceDistancePercent")
 
-　　　　    kabutan_chart = f"https://kabutan.jp/stock/chart?code={code}"
-   　　　　 kabutan_fin   = f"https://kabutan.jp/stock/finance?code={code}"
-    　　　　kabutan_news  = f"https://kabutan.jp/stock/news?code={code}"
+        kabutan_chart = f"https://kabutan.jp/stock/chart?code={code}"
+        kabutan_fin   = f"https://kabutan.jp/stock/finance?code={code}"
+        kabutan_news  = f"https://kabutan.jp/stock/news?code={code}"
 
 　　　　    # ✅ 枠付きのコンテナで中身を全部包む
-    　　　　with st.container(border=True):   # ★ ここがポイント
-        　　　　cols = st.columns([3, 2, 2, 2, 3, 1])
-
-      　　　　  with cols[0]:
-       　　　　     st.markdown(f"**[{day_label}] {name}（{code}）**")
-      　　　　  with cols[1]:
-         　　　　   st.write(fmt_num(half_retrace))
-      　　　　  with cols[2]:
-          　　　　  st.write(fmt_num(current_price, "{:.1f}"))
-      　　　　  with cols[3]:
-         　　　　   st.write(fmt_num(distance, "{:.2f}"))
-
-     　　　　   with cols[4]:
-          　　　　  st.markdown(
-              　　　　  f"[チャート]({kabutan_chart})｜"
-              　　　　  f"[決算]({kabutan_fin})｜"
-              　　　　  f"[ニュース]({kabutan_news})"
-         　　　　   )
-
-     　　　　   with cols[5]:
-          　　　　  if st.button("追加", key=f"to_my_{code}_{idx}"):
-            　　　　    add_to_watch_list(
-             　　　　       code=code,
-                 　　　　   name=name,
-                  　　　　  half_retrace=half_retrace,
-                  　　　　  current_price=current_price,
-                  　　　　  distance_percent=distance,
-             　　　　   )
-              　　　　  st.rerun()
+        with st.container(border=True):   # ★ ここがポイント
+            cols = st.columns([3, 2, 2, 2, 3, 1])
+            with cols[0]:
+                st.markdown(f"**[{day_label}] {name}（{code}）**")
+            with cols[1]:
+                st.write(fmt_num(half_retrace))
+            with cols[2]:
+                st.write(fmt_num(current_price, "{:.1f}"))
+            with cols[3]:
+                st.write(fmt_num(distance, "{:.2f}"))
+            with cols[4]:
+                st.markdown(
+                    f"[チャート]({kabutan_chart})｜"
+                    f"[決算]({kabutan_fin})｜"
+                    f"[ニュース]({kabutan_news})"
+                )
+            with cols[5]:
+                if st.button("追加", key=f"to_my_{code}_{idx}"):
+                    add_to_watch_list(
+                        code=code,
+                        name=name,
+                        half_retrace=half_retrace,
+                        current_price=current_price,
+                        distance_percent=distance,
+                    )
+                    st.rerun()
 
