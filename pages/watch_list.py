@@ -5,13 +5,36 @@ import requests
 # ① Supabase 接続（app_rise_PRO と同じ処理）
 from supabase import create_client, Client
 
+if supabase is None:
+    st.error("Supabase 接続情報が設定されていません。\nsecrets.toml または環境変数 SUPABASE_URL / SUPABASE_KEY を設定してください。")
+    st.stop()
+
 @st.cache_resource
-def init_connection():
-    url = st.secrets["supabase"]["url"]
-    key = st.secrets["supabase"]["key"]
+def init_connection() -> Client | None:
+    # まず st.secrets を試す
+    url = None
+    key = None
+    try:
+        if "supabase" in st.secrets:
+            url = st.secrets["supabase"].get("url")
+            key = st.secrets["supabase"].get("key")
+    except Exception:
+        pass
+
+    # だめなら環境変数から
+    if not url:
+        url = os.environ.get("SUPABASE_URL")
+    if not key:
+        key = os.environ.get("SUPABASE_KEY")
+
+    if not url or not key:
+        # ここで None を返して、あとで画面側で優しくメッセージを出す
+        return None
+
     return create_client(url, key)
 
-supabase: Client = init_connection()
+supabase: Client | None = init_connection()
+SESSION_KEY = st.session_state.get("session_key", "default_session")
 
 # セッションID
 if "session_key" not in st.session_state:
