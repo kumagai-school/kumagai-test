@@ -108,8 +108,31 @@ for rec in records:
     if df_candle.empty:
         st.warning("チャートデータが取得できませんでした。")
     else:
-        # Plotly 用にソート
+        st.write("**5ヵ月 日足チャート（ローソク足）**")
+
         df_plot = df_candle.sort_values("dt")
+
+        # ==== 日本語ホバー用テキストを作成 ====
+        hover_text = [
+            "日付：{d}<br>"
+            "始値：{o:,}<br>"
+            "高値：{h:,}<br>"
+            "安値：{l:,}<br>"
+            "終値：{c:,}".format(
+                d=dt.strftime("%Y-%m-%d"),
+                o=o,
+                h=h,
+                l=l,
+                c=c,
+            )
+            for dt, o, h, l, c in zip(
+                df_plot["dt"],
+                df_plot["open"],
+                df_plot["high"],
+                df_plot["low"],
+                df_plot["close"],
+            )
+        ]
 
         fig = go.Figure(
             data=[
@@ -119,20 +142,15 @@ for rec in records:
                     high=df_plot["high"],
                     low=df_plot["low"],
                     close=df_plot["close"],
-                    name="日足", 
-                    increasing_line_color="red",   # 陽線
-                    decreasing_line_color="blue",   # 陰線
-                    hovertemplate=(
-                        "日付：%{x}<br>"
-                        "始値：%{open}<br>"
-                        "高値：%{high}<br>"
-                        "安値：%{low}<br>"
-                        "終値：%{close}<extra></extra>"),
+                    name="日足",
+                    increasing_line_color="red",   # 陽線：赤
+                    decreasing_line_color="blue",  # 陰線：青
+                    hovertext=hover_text,          # ★ 日本語テキストを渡す
+                    hoverinfo="text",              # ★ hovertextだけ表示
                 )
             ]
         )
 
-        # レイアウト少し整える（お好みで調整OK）
         fig.update_layout(
             xaxis_title="日付",
             yaxis_title="株価（円）",
@@ -141,17 +159,17 @@ for rec in records:
             margin=dict(l=40, r=20, t=40, b=40),
         )
 
+        # 上のツールバーを非表示
         st.plotly_chart(
             fig,
             use_container_width=True,
-            config={
-                "displayModeBar": False,   # ← これで上のマークを全部消す
-            },
+            config={"displayModeBar": False},
         )
 
 
 
     st.markdown("---")
+
 
 
 
