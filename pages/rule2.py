@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 import os
 
-API_BASE = st.secrets.get("TOWER_API_BASE", "https://app.kumagai-stock.com")
+API_BASE = os.getenv("TOWER_API_BASE", "https://app.kumagai-stock.com")
 
 @st.cache_data(ttl=60)
 def fetch_5m_breakouts():
@@ -38,4 +38,5 @@ if df.empty:
 else:
     st.success(f"抽出銘柄数: {len(df)} 件")
     st.dataframe(df, use_container_width=True, hide_index=True)
+
 
