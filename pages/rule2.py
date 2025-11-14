@@ -118,7 +118,7 @@ for rec in records:
                     high=df_plot["high"],
                     low=df_plot["low"],
                     close=df_plot["close"],
-                    name="日足"
+                    name="日足", 
                     increasing_line_color="red",   # 陽線
                     decreasing_line_color="blue"   # 陰線
                 )
@@ -138,5 +138,3 @@ for rec in records:
 
 
     st.markdown("---")
-
-
