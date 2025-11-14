@@ -11,8 +11,8 @@ API_BASE = os.getenv("TOWER_API_BASE", "https://app.kumagai-stock.com")
 st.markdown("""
 <style>
 .small-line {
-    line-height: 1.1;
-    margin-top: -8px;
+    line-height: 1.5;
+    margin-top: -5px;
     margin-bottom: -2px;
 }
 </style>
@@ -62,9 +62,9 @@ def fetch_candle_5m(code: str):
 # =========================
 # Streamlit UI
 # =========================
-st.title("「ルール2・スクリーニング")
+st.title("「ルール2」スクリーニング")
 
-with st.spinner("塔サーバーからデータ取得中…"):
+with st.spinner("サーバーからデータ取得中…"):
     try:
         records = fetch_breakouts()
     except Exception as e:
@@ -138,3 +138,4 @@ for rec in records:
 
 
     st.markdown("---")
+
