@@ -51,7 +51,7 @@ def fetch_candle_5m(code: str):
 # =========================
 # Streamlit UI
 # =========================
-st.title("「ルール2・スクリーニング")
+st.title("「ルール2」スクリーニング")
 
 with st.spinner("塔サーバーからデータ取得中…"):
     try:
@@ -102,3 +102,4 @@ for rec in records:
         st.line_chart(chart_df, use_container_width=True)
 
     st.markdown("---")
+
