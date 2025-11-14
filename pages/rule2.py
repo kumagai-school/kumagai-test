@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import pandas as pd
 from datetime import datetime
+import os
 
 API_BASE = st.secrets.get("TOWER_API_BASE", "https://app.kumagai-stock.com")
 
@@ -37,3 +38,4 @@ if df.empty:
 else:
     st.success(f"抽出銘柄数: {len(df)} 件")
     st.dataframe(df, use_container_width=True, hide_index=True)
+
