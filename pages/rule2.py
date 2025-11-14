@@ -83,7 +83,9 @@ for rec in records:
     code = rec.get("code", "")
     name = rec.get("name", "")
     base_high = rec.get("base_high", None)
+    break_date_str = rec.get("break_date", "")
     base_low = rec.get("base_low", None)
+    break_date_str = rec.get("break_date", "")
     break_close = rec.get("break_close", None)
     break_date_str = rec.get("break_date", "")
 
@@ -95,7 +97,7 @@ for rec in records:
         break_date_disp = break_date_str
 
     # === テキスト部分 ===
-    st.markdown(f"## {name}（{code}）")
+    st.markdown(f"### {name}（{code}）")
 
     st.markdown(f"<p class='small-line'><b>📈もみ合い高値：</b> {base_high:,.0f} 円</p>", unsafe_allow_html=True)
     st.markdown(f"<p class='small-line'><b>📉もみ合い安値：</b> {base_low:,.0f} 円</p>", unsafe_allow_html=True)
@@ -106,8 +108,6 @@ for rec in records:
     if df_candle.empty:
         st.warning("チャートデータが取得できませんでした。")
     else:
-        st.write("**5ヵ月 日足チャート（ローソク足）**")
-
         # Plotly 用にソート
         df_plot = df_candle.sort_values("dt")
 
@@ -121,7 +121,13 @@ for rec in records:
                     close=df_plot["close"],
                     name="日足", 
                     increasing_line_color="red",   # 陽線
-                    decreasing_line_color="blue"   # 陰線
+                    decreasing_line_color="blue",   # 陰線
+                    hovertemplate=(
+                        "日付：%{x}<br>"
+                        "始値：%{open}<br>"
+                        "高値：%{high}<br>"
+                        "安値：%{low}<br>"
+                        "終値：%{close}<extra></extra>"),
                 )
             ]
         )
@@ -135,9 +141,17 @@ for rec in records:
             margin=dict(l=40, r=20, t=40, b=40),
         )
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            config={
+                "displayModeBar": False,   # ← これで上のマークを全部消す
+            },
+        )
+
 
 
     st.markdown("---")
+
 
 
