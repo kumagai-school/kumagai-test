@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 import os
+import plotly.graph_objects as go
 
 # Tower API のベースURL
 API_BASE = os.getenv("TOWER_API_BASE", "https://app.kumagai-stock.com")
@@ -138,4 +139,5 @@ for rec in records:
 
 
     st.markdown("---")
+
 
