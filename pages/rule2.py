@@ -3,10 +3,20 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 import os
-import plotly.graph_objects as go
 
 # Tower API のベースURL
 API_BASE = os.getenv("TOWER_API_BASE", "https://app.kumagai-stock.com")
+
+
+st.markdown("""
+<style>
+.small-line {
+    line-height: 1.1;
+    margin-top: -8px;
+    margin-bottom: -2px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 # 5ヶ月もみ合いブレイク銘柄一覧を取得
@@ -52,8 +62,7 @@ def fetch_candle_5m(code: str):
 # =========================
 # Streamlit UI
 # =========================
-st.markdown("---")
-st.markdown("### 「ルール2」スクリーニング")
+st.title("「ルール2・スクリーニング")
 
 with st.spinner("塔サーバーからデータ取得中…"):
     try:
@@ -85,14 +94,11 @@ for rec in records:
         break_date_disp = break_date_str
 
     # === テキスト部分 ===
-    st.markdown(f"### {name}（{code}）")
+    st.markdown(f"## {name}（{code}）")
 
-    if base_high is not None:
-        st.write(f"**もみ合い高値：** {base_high:,.0f} 円")
-    if base_low is not None:
-        st.write(f"**もみ合い安値：** {base_low:,.0f} 円")
-    if break_close is not None:
-        st.write(f"**ブレイクポイント：** {break_close:,.0f} 円（{break_date_disp}）")
+    st.markdown(f"<p class='small-line'><b>📈もみ合い高値：</b> {base_high:,.0f} 円</p>", unsafe_allow_html=True)
+    st.markdown(f"<p class='small-line'><b>📉もみ合い安値：</b> {base_low:,.0f} 円</p>", unsafe_allow_html=True)
+    st.markdown(f"<p class='small-line'><b>📌ブレイクポイント：</b> {break_close:,.0f} 円（{break_date_disp}）</p>", unsafe_allow_html=True)
 
     # === 5ヶ月チャート ===
     _, df_candle = fetch_candle_5m(code)
@@ -113,6 +119,8 @@ for rec in records:
                     low=df_plot["low"],
                     close=df_plot["close"],
                     name="日足"
+                    increasing_line_color="red",   # 陽線
+                    decreasing_line_color="blue"   # 陰線
                 )
             ]
         )
