@@ -63,7 +63,7 @@ def fetch_candle_5m(code: str):
 # =========================
 # Streamlit UI
 # =========================
-st.title("「ルール2」スクリーニング")
+st.markdown(f"## 「ルール2」スクリーニング")
 
 with st.spinner("サーバーからデータ取得中…"):
     try:
@@ -97,7 +97,7 @@ for rec in records:
         break_date_disp = break_date_str
 
     # === テキスト部分 ===
-    st.markdown(f"### {name}（{code}）")
+    st.markdown(f"#### {name}（{code}）")
 
     st.markdown(f"<p class='small-line'><b>📈もみ合い高値：</b> {base_high:,.0f} 円</p>", unsafe_allow_html=True)
     st.markdown(f"<p class='small-line'><b>📉もみ合い安値：</b> {base_low:,.0f} 円</p>", unsafe_allow_html=True)
@@ -108,7 +108,6 @@ for rec in records:
     if df_candle.empty:
         st.warning("チャートデータが取得できませんでした。")
     else:
-        st.write("**5ヵ月 日足チャート（ローソク足）**")
 
         df_plot = df_candle.sort_values("dt")
 
@@ -169,6 +168,7 @@ for rec in records:
 
 
     st.markdown("---")
+
 
 
 
