@@ -3,6 +3,7 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 import os
+import plotly.graph_objects as go
 
 # Tower API のベースURL
 API_BASE = os.getenv("TOWER_API_BASE", "https://app.kumagai-stock.com")
@@ -51,7 +52,8 @@ def fetch_candle_5m(code: str):
 # =========================
 # Streamlit UI
 # =========================
-st.title("「ルール2」スクリーニング")
+st.markdown("---")
+st.markdown("### 「ルール2」スクリーニング")
 
 with st.spinner("塔サーバーからデータ取得中…"):
     try:
@@ -83,7 +85,7 @@ for rec in records:
         break_date_disp = break_date_str
 
     # === テキスト部分 ===
-    st.markdown(f"## {name}（{code}）")
+    st.markdown(f"### {name}（{code}）")
 
     if base_high is not None:
         st.write(f"**もみ合い高値：** {base_high:,.0f} 円")
@@ -97,9 +99,36 @@ for rec in records:
     if df_candle.empty:
         st.warning("チャートデータが取得できませんでした。")
     else:
-        st.write("**5ヵ月チャート（終値）**")
-        chart_df = df_candle[["dt", "close"]].set_index("dt")
-        st.line_chart(chart_df, use_container_width=True)
+        st.write("**5ヵ月 日足チャート（ローソク足）**")
+
+        # Plotly 用にソート
+        df_plot = df_candle.sort_values("dt")
+
+        fig = go.Figure(
+            data=[
+                go.Candlestick(
+                    x=df_plot["dt"],
+                    open=df_plot["open"],
+                    high=df_plot["high"],
+                    low=df_plot["low"],
+                    close=df_plot["close"],
+                    name="日足"
+                )
+            ]
+        )
+
+        # レイアウト少し整える（お好みで調整OK）
+        fig.update_layout(
+            xaxis_title="日付",
+            yaxis_title="株価（円）",
+            xaxis_rangeslider_visible=False,
+            height=400,
+            margin=dict(l=40, r=20, t=40, b=40),
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
 
     st.markdown("---")
+
 
