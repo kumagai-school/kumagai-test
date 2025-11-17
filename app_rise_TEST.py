@@ -105,6 +105,9 @@ def load_data(source):
 # -------------------------------------------------------------
 option = st.radio("『高値』付けた日を選んでください", ["本日", "昨日", "2日前", "3日前", "4日前", "5日前"], horizontal=True)
 
+# ← ここに一行
+st.write("DEBUG option =", repr(option))
+
 data_source = {
     "本日": "today",
     "昨日": "yesterday",
